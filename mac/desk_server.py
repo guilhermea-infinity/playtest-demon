@@ -18,7 +18,7 @@ def make_handler(store, port):
     origins = {f"http://{h}" for h in hosts}
 
     class H(BaseHTTPRequestHandler):
-        server_version = "QADesk/0.1"
+        server_version = "QADemon/0.3.1"
 
         def log_message(self, *a):
             pass
@@ -48,6 +48,8 @@ def make_handler(store, port):
             u = urlparse(self.path)
             if u.path in ("/", "/index.html"):
                 return self._send(200, UI.read_bytes(), "text/html; charset=utf-8")
+            if u.path == "/devil.svg":
+                return self._send(200, (UI.parent / "devil.svg").read_bytes(), "image/svg+xml")
             if u.path == "/app.css":
                 return self._send(200, (UI.parent / "app.css").read_bytes(), "text/css; charset=utf-8")
             if u.path == "/api/models":

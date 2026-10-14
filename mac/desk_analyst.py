@@ -198,7 +198,7 @@ class Analyst(threading.Thread):
                         summary=data.get("clip_summary"), seconds=round(time.time() - t0))
             self.say(f"Drafted {', '.join(ids)} from {rel} in {round(time.time() - t0)} s")
             try:
-                self.notify("QA Desk", f"{len(ids)} ticket{'s' if len(ids) != 1 else ''} to review · {game}")
+                self.notify("QA Demon", f"{len(ids)} ticket{'s' if len(ids) != 1 else ''} to review · {game}")
             except OSError:
                 pass
         except Exception as e:
@@ -357,7 +357,7 @@ class Analyst(threading.Thread):
     def run_provider(self, cmd, prompt, work):
         with self.process_lock:
             if self.stop.is_set():
-                raise RuntimeError("QA Desk stopped; this clip will resume on restart")
+                raise RuntimeError("QA Demon stopped; this clip will resume on restart")
             process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                        text=True, cwd=work, env=child_env(), start_new_session=True)
             self.process = process

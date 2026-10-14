@@ -1,4 +1,4 @@
-# How QA Clip works
+# How QA Demon works
 
 ## Capture and transfer
 

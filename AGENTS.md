@@ -1,6 +1,6 @@
-# QA Clip agent instructions
+# QA Demon agent instructions
 
-QA Clip is an Android-only screen recorder plus a macOS receiver and QA review desk.
+QA Demon is an Android-only screen recorder plus a macOS receiver and QA review desk.
 
 ## If asked to install
 

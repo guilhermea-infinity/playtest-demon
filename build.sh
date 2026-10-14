@@ -16,5 +16,5 @@ fi
 mkdir -p out
 (cd android && ./gradlew assembleDebug -q)
 QA_VERSION=$(sed -nE "s/.*versionName '(.*)'.*/\1/p" android/app/build.gradle)
-cp android/app/build/outputs/apk/debug/app-debug.apk "out/QAClip-$QA_VERSION.apk"
-printf 'Built out/QAClip-%s.apk\n' "$QA_VERSION"
+cp android/app/build/outputs/apk/debug/app-debug.apk "out/QADemon-$QA_VERSION.apk"
+printf 'Built out/QADemon-%s.apk\n' "$QA_VERSION"

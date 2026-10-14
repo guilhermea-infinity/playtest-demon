@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="keys_desc">Lets QA Clip use the volume buttons while you play: Vol + saves your configured lookback (0–30 seconds) and keeps recording, Vol + again stops and sends the clip to your Mac, Vol − while recording throws it away. Only active during a QA Clip session; otherwise the buttons work as normal. It reads nothing on screen except which app is open, to name the clip.</string>
+    <string name="keys_desc">Lets QA Demon use the volume buttons while you play: Vol + saves your configured lookback (0–30 seconds) and keeps recording, Vol + again stops and sends the clip to your Mac, Vol − while recording throws it away. Only active during a QA Demon session; otherwise the buttons work as normal. It reads nothing on screen except which app is open, to name the clip.</string>
 </resources>

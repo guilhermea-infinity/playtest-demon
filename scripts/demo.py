@@ -47,7 +47,7 @@ def main():
                 d.ellipse((x+25,y+18,x+57,y+50),fill=['#5e8d4a','#b8d8fc','#6f9859','#826544'][i])
         d.rounded_rectangle((38,528,322,590),radius=19,fill='#d4ac42')
         d.text((108,546),'Collect reward',font=font,fill='#263525')
-        d.text((24,611),'Synthetic demo · QA Clip',font=font,fill=ink)
+        d.text((24,611),'Synthetic demo · QA Demon',font=font,fill=ink)
         preview = folder / f'demo-{i}.png';frame.save(preview)
         subprocess.run(['ffmpeg','-v','error','-y','-loop','1','-i',str(preview),'-t','3','-pix_fmt','yuv420p',str(root/clip)],check=True)
         meta={'file':clip,'app':game,'clipSeconds':3,'voice':False,'pressedAtSecond':1}
@@ -70,7 +70,7 @@ def main():
                            'moment':{'from':0,'to':3},'quote':{'text':'Make it clear when I can collect the reward.','t':1},
                            'shots':[{'file':'Pocket Garden/demo-0.png','clean':'Pocket Garden/demo-0.png','t':1,'caption':'The reward action at the bottom of the garden.','use':True}]})
     (root/'inbox.jsonl').write_text(''.join(json.dumps(m)+'\n' for m in records))
-    print(f'Synthetic inbox created at {root}. Launch QA Desk with --inbox "{root}" --no-inbox --paused.')
+    print(f'Synthetic inbox created at {root}. Launch QA Demon with --inbox "{root}" --no-inbox --paused.')
 
 if __name__ == '__main__':
     main()

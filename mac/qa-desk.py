@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""QA Desk: the whole Mac side of QA Clip in one window.
+"""QA Demon: the whole Mac side of QA Demon in one window.
 
   python3 ~/Desktop/qa-clip/mac/qa-desk.py
 
@@ -83,7 +83,7 @@ def main():
     try:
         fcntl.flock(inbox_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        ap.error(f"Another QA Desk is already using {inbox}")
+        ap.error(f"Another QA Demon is already using {inbox}")
     store = Store(inbox)
     config = {}
     if a.provider:
@@ -108,7 +108,7 @@ def main():
     url = f"http://127.0.0.1:{a.port}"
     missing = [n for n, k in (("ffmpeg", "ffmpeg"), ("whisper-cli", "whisper"), ("a whisper model", "whisper_model"),
                               (store.config()["provider"], store.config()["provider"])) if not tools[k]]
-    print(f"\nQA Desk is on.\n  Review page  {url}\n  Clips        {inbox}\n  Analyst      {store.config()['provider']} ({store.config()['model'] or 'CLI default'})"
+    print(f"\nQA Demon is on.\n  Review page  {url}\n  Clips        {inbox}\n  Analyst      {store.config()['provider']} ({store.config()['model'] or 'CLI default'})"
           + (f"\n  Missing      {', '.join(missing)}" if missing else "")
           + "\nLeave this window open while you play. Ctrl+C to stop.\n", flush=True)
     if not a.no_open:
@@ -133,7 +133,7 @@ def main():
                 child.wait(5)
             except Exception:
                 child.kill()
-        print("\nQA Desk stopped.")
+        print("\nQA Demon stopped.")
 
 
 if __name__ == "__main__":

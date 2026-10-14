@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""QA Inbox: the Mac half of QA Clip. Run it, leave the window open, play on the phone.
+"""QA Inbox: the Mac half of QA Demon. Run it, leave the window open, play on the phone.
 
   python3 ~/Desktop/qa-clip/mac/qa-inbox.py
 
@@ -264,7 +264,7 @@ def usb_loop(port):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Receive QA Clip videos from Android phones.")
+    ap = argparse.ArgumentParser(description="Receive QA Demon videos from Android phones.")
     ap.add_argument("--inbox", default="~/Desktop/QA-Inbox")
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--devices", default="~/.config/qa-clip/devices.json", help="approved phones")
