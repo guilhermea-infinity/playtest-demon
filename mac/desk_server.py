@@ -45,6 +45,8 @@ def make_handler(store, port):
             u = urlparse(self.path)
             if u.path in ("/", "/index.html"):
                 return self._send(200, UI.read_bytes(), "text/html; charset=utf-8")
+            if u.path == "/app.css":
+                return self._send(200, (UI.parent / "app.css").read_bytes(), "text/css; charset=utf-8")
             if u.path == "/api/state":
                 return self._json(store.state())
             if u.path.startswith("/media/"):
@@ -114,7 +116,14 @@ def make_handler(store, port):
                 body = json.loads(self.rfile.read(n) or b"{}")
             except Exception:
                 return self._send(400, "{}")
+            if not isinstance(body, dict):
+                return self._json({"error": "Expected a JSON object"}, 400)
             p = urlparse(self.path).path
+            if p == "/api/settings":
+                try:
+                    return self._json({"ok": True, "settings": store.configure(body)})
+                except ValueError as exc:
+                    return self._json({"error": str(exc)}, 400)
 
             m = re.fullmatch(r"/api/ticket/([A-Z0-9]+-\d+)", p)
             if m:
@@ -140,7 +149,7 @@ def make_handler(store, port):
             if p == "/api/clip/retry":
                 hint = body.get("hint")
                 ok = store.retry_clip(str(body.get("clip", "")), hint if isinstance(hint, str) and hint.strip() else None)
-                return self._json({"ok": ok}, 200 if ok else 404)
+                return self._json({"ok": ok}, 200 if ok else 409)
             self._send(404, "{}")
 
     return H

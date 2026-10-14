@@ -1,13 +1,15 @@
 """The analyst: a background worker that drafts tickets for every new clip.
 
 For each clip: frames every 0.5 s and an overview sheet (ffmpeg), the tester's words (whisper-cli), then one fresh
-headless Claude Code run (`claude -p`) that looks at the frames and returns tickets as JSON. Each clip gets its own
-run, so a confusing clip never leaks into the next one. Runs use your Claude Code login.
+headless CLI run (Claude Code or Codex) that looks at the frames and returns tickets as JSON. Each clip gets its own
+run, so a confusing clip never leaks into the next one. Runs use the selected CLI login.
 """
+import copy
 import json
 import math
 import os
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -40,7 +42,7 @@ SCHEMA = {
                 "shots": {"type": "array", "minItems": 1, "maxItems": 3, "items": {
                     "type": "object",
                     "properties": {"t": {"type": "number"}, "caption": {"type": "string"},
-                                   "box": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4}},
+                                   "box": {"type": ["array", "null"], "items": {"type": "number"}, "minItems": 4, "maxItems": 4}},
                     "required": ["t", "caption"]}},
                 "checks": {"type": "array", "items": {"type": "string"}},
                 "confidence": {"enum": ["high", "medium", "low"]},
@@ -69,12 +71,13 @@ def find(name, *extra):
 
 
 def find_tools():
-    model = next((os.path.expanduser(m) for m in WHISPER_MODELS if os.path.exists(os.path.expanduser(m))), None)
+    model = next((os.path.expanduser(m) for m in [os.environ.get("QA_WHISPER_MODEL", ""), *WHISPER_MODELS] if os.path.exists(os.path.expanduser(m))), None)
     return {
         "ffmpeg": find("ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"),
         "ffprobe": find("ffprobe", "/opt/homebrew/bin/ffprobe", "/usr/local/bin/ffprobe"),
         "whisper": find("whisper-cli", "/opt/homebrew/bin/whisper-cli", "/usr/local/bin/whisper-cli"),
         "whisper_model": model,
+        "codex": find("codex", "~/.local/bin/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex"),
         "claude": find("claude", "~/.local/bin/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude",
                        "~/.claude/local/claude"),
     }
@@ -101,54 +104,63 @@ def mmss(t):
 
 
 class Analyst(threading.Thread):
-    def __init__(self, store, tools, model, say, notify, skip_existing=False):
+    def __init__(self, store, tools, say, notify, stop=None):
         super().__init__(daemon=True)
-        self.store, self.tools, self.model, self.say, self.notify = store, tools, model, say, notify
-        self.skip_existing = skip_existing
+        self.store, self.tools, self.say, self.notify = store, tools, say, notify
+        self.stop = stop or threading.Event()
+        self.auth_key = None
+        self.process = None
+        self.process_lock = threading.Lock()
         self.auth_checked = 0
 
     # ---- the loop ----
 
     def run(self):
-        self.store.sync_inbox(skip_existing=self.skip_existing)
-        while True:
+        while not self.stop.is_set():
             try:
-                self.store.sync_inbox()
+                config = self.store.config()
                 rel = self.store.next_queued()
-                if rel and self.signed_in():
-                    self.analyse(rel)
+                if rel and not config["paused"] and self.signed_in(config):
+                    self.analyse(rel, config)
                     continue
             except Exception as e:  # never let the worker die
                 self.say(f"Analyst error: {e}")
-            time.sleep(2)
+            self.stop.wait(2)
 
-    def signed_in(self):
-        """Clips wait in the queue (instead of failing) until Claude Code is signed in on this Mac."""
+    def signed_in(self, config):
+        """Do not consume clips while the selected CLI is missing or signed out."""
+        provider = config["provider"]
+        key = (provider, config["model"])
+        if self.auth_key != key:
+            self.auth_key = key
+            self.auth_checked = 0
+            self.store.flags.pop("auth", None)
         flags = self.store.flags
         if flags.get("auth") == "ok":
             return True
-        if time.time() - self.auth_checked < 15:
+        if time.time() - self.auth_checked < 10:
             return False
         self.auth_checked = time.time()
-        if not self.tools["claude"]:
+        self.tools = find_tools()
+        flags["tools"] = {k: bool(v) for k, v in self.tools.items()}
+        if not self.tools[provider]:
             flags["auth"] = "missing"
             return False
         try:
-            out = subprocess.run([self.tools["claude"], "auth", "status"], capture_output=True, text=True,
-                                 timeout=30, env=child_env()).stdout
-            ok = json.loads(out).get("loggedIn") is True
+            args = ["auth", "status"] if provider == "claude" else ["login", "status"]
+            result = subprocess.run([self.tools[provider], *args], capture_output=True, text=True,
+                                    timeout=30, env=child_env())
+            ok = json.loads(result.stdout).get("loggedIn") is True if provider == "claude" else result.returncode == 0
         except Exception:
-            ok = True  # can't tell: try the real run, which reports its own error
-        if ok:
-            flags["auth"] = "ok"
-        elif flags.get("auth") != "signed-out":
-            flags["auth"] = "signed-out"
-            self.say("Claude Code isn't signed in on this Mac. Run `claude auth login` in Terminal; clips wait until then.")
+            ok = False
+        flags["auth"] = "ok" if ok else "signed-out"
         return ok
 
     # ---- one clip ----
 
-    def analyse(self, rel):
+    def analyse(self, rel, config=None):
+        config = config or self.store.config()
+        provider, model = config["provider"], config["model"]
         st = self.store
         c = st.clips[rel]
         clip = st.inbox / rel
@@ -156,7 +168,7 @@ class Analyst(threading.Thread):
         meta.update({k: v for k, v in (_read(clip.with_suffix(".json")) or {}).items() if v not in (None, "")})
         game = meta.get("appLabel") or meta.get("app") or "Unknown app"
         work = st.work / rel.replace("/", " - ").removesuffix(".mp4")
-        st.set_clip(rel, status="working", startedAt=time.time(), step="Reading the clip", error=None)
+        st.set_clip(rel, status="working", startedAt=time.time(), step="Extracting frames", error=None, provider=provider, model=model or "CLI default")
         self.say(f"Analysing {rel}")
         t0 = time.time()
         try:
@@ -171,26 +183,32 @@ class Analyst(threading.Thread):
             self.frames(clip, work)
             step = self.sheet(work, dur, pressed, w, h)
 
-            st.set_clip(rel, step="Listening")
+            preview = str(next((work / "frames").glob("*.jpg")).relative_to(st.inbox))
+            st.set_clip(rel, step="Transcribing audio", preview=preview)
             transcript = self.transcribe(clip, work) if meta.get("voice", True) else None
 
-            st.set_clip(rel, step="Claude is watching")
+            st.set_clip(rel, step=f"{'Claude' if provider == 'claude' else 'Codex'} is analysing")
             prompt = self.prompt(meta, game, dur, w, h, pressed, step, transcript, c.get("hint"))
             (work / "prompt.md").write_text(prompt)
-            data = self.ask_claude(prompt, work)
+            data = self.ask_provider(prompt, work, provider, model)
 
             st.set_clip(rel, step="Writing tickets")
             ids = self.make_tickets(data, rel, clip, meta, game, dur, w, h)
             st.set_clip(rel, status="done", doneAt=time.time(), tickets=c.get("tickets", []) + ids, step=None,
                         summary=data.get("clip_summary"), seconds=round(time.time() - t0))
             self.say(f"Drafted {', '.join(ids)} from {rel} in {round(time.time() - t0)} s")
-            self.notify("QA Desk", f"{len(ids)} ticket{'s' if len(ids) != 1 else ''} to review · {game}")
+            try:
+                self.notify("QA Desk", f"{len(ids)} ticket{'s' if len(ids) != 1 else ''} to review · {game}")
+            except OSError:
+                pass
         except Exception as e:
+            if self.stop.is_set():
+                return  # remains working on disk; startup will requeue it
             msg = str(e)
             if "authenticat" in msg.lower() or "login" in msg.lower() or "oauth" in msg.lower():
                 st.flags["auth"] = "signed-out"
                 st.set_clip(rel, status="queued", step=None)  # wait for sign-in instead of failing
-                self.say("Claude Code isn't signed in. Run `claude auth login` in Terminal; the clip will wait.")
+                self.say(f"{provider} needs sign-in. The clip will wait.")
                 return
             st.set_clip(rel, status="failed", error=msg[:500], step=None)
             self.say(f"Couldn't analyse {rel}: {msg[:300]}")
@@ -265,7 +283,7 @@ class Analyst(threading.Thread):
         if transcript:
             said = "\n".join(f"- {s['from']:.1f} to {s['to']:.1f} s: \"{s['text']}\"" for s in transcript)
         elif transcript is None:
-            said = "(no voice recorded)"
+            said = "(transcript unavailable: audio may be absent, or local transcription is not configured; do not invent a quote)"
         else:
             said = "(the tester didn't say anything)"
         open_t = [t for t in self.store.tickets.values() if t["game"] == game and t["status"] in ("draft", "approved", "sent")]
@@ -283,32 +301,78 @@ class Analyst(threading.Thread):
             tpl = tpl.replace("{{" + k + "}}", str(v))
         return tpl
 
-    def ask_claude(self, prompt, work):
-        if not self.tools["claude"]:
-            raise RuntimeError("the claude command isn't installed")
-        cmd = [self.tools["claude"], "-p", "--model", self.model, "--tools", "Read,Glob",
-               "--strict-mcp-config", "--setting-sources", "project", "--no-session-persistence",
-               "--output-format", "json", "--json-schema", json.dumps(SCHEMA)]
+    def ask_provider(self, prompt, work, provider, model):
+        binary = self.tools.get(provider)
+        if not binary:
+            raise RuntimeError(f"The {provider} command isn't installed")
+        if provider == "claude":
+            cmd = [binary, "-p", "--tools", "Read,Glob", "--allowedTools", "Read,Glob",
+                   "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence",
+                   "--output-format", "json", "--json-schema", json.dumps(SCHEMA)]
+        else:
+            schema = strict_schema(SCHEMA)
+            (work / "schema.json").write_text(json.dumps(schema))
+            cmd = [binary, "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral",
+                   "--output-schema", str(work / "schema.json"),
+                   "--output-last-message", str(work / "answer.json"), "--image", str(work / "sheet.jpg")]
+            prompt += "\nThe attached image is sheet.jpg. Use view_image for individual local frames. Return only ticket JSON."
+        if model:
+            cmd += ["--model", model]
+        if provider == "codex":
+            cmd += ["-"]  # terminate image arguments; prompt is read from stdin
         try:
-            r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, cwd=work, timeout=900,
-                               env=child_env())
+            r = self.run_provider(cmd, prompt, work)
         except subprocess.TimeoutExpired:
-            raise RuntimeError("Claude took more than 15 minutes")
-        (work / "claude.json").write_text(r.stdout)
+            raise RuntimeError(f"{provider} took more than 15 minutes. Retry this clip or choose another model.")
+        (work / f"{provider}.log").write_text(r.stdout + "\n" + r.stderr)
+        if r.returncode:
+            raise RuntimeError(f"{provider} failed: {(r.stderr or r.stdout).strip()[-400:]}")
         try:
-            res = json.loads(r.stdout)
-        except Exception:
-            raise RuntimeError(f"Claude didn't answer: {(r.stderr or r.stdout).strip()[-400:]}")
-        if res.get("is_error"):
-            raise RuntimeError(f"Claude: {str(res.get('result'))[:400]}")
-        data = res.get("structured_output")
-        if not isinstance(data, dict):
-            try:
-                txt = str(res.get("result", ""))
-                data = json.loads(txt[txt.index("{"):txt.rindex("}") + 1])
-            except Exception:
-                raise RuntimeError("Claude's answer wasn't the ticket JSON")
+            if provider == "codex":
+                data = json.loads((work / "answer.json").read_text())
+            else:
+                res = json.loads(r.stdout)
+                if res.get("is_error"):
+                    raise RuntimeError(f"Claude: {str(res.get('result'))[:400]}")
+                data = res.get("structured_output")
+                if not isinstance(data, dict):
+                    txt = str(res.get("result", ""))
+                    data = json.loads(txt[txt.index("{"):txt.rindex("}") + 1])
+            from jsonschema import validate
+            validate(data, SCHEMA)
+        except (ValueError, OSError) as exc:
+            raise RuntimeError(f"{provider} did not return valid ticket JSON: {exc}") from exc
         return data
+
+    def cancel_provider(self):
+        with self.process_lock:
+            if self.process and self.process.poll() is None:
+                try:
+                    os.killpg(self.process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+
+    def run_provider(self, cmd, prompt, work):
+        with self.process_lock:
+            if self.stop.is_set():
+                raise RuntimeError("QA Desk stopped; this clip will resume on restart")
+            process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       text=True, cwd=work, env=child_env(), start_new_session=True)
+            self.process = process
+        try:
+            stdout, stderr = process.communicate(prompt, timeout=900)
+            return subprocess.CompletedProcess(cmd, process.returncode, stdout, stderr)
+        except subprocess.TimeoutExpired:
+            self.cancel_provider()
+            try:
+                process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+            raise
+        finally:
+            with self.process_lock:
+                self.process = None
 
     # ---- tickets ----
 
@@ -321,7 +385,7 @@ class Analyst(threading.Thread):
                        "moment": {"from": max(0, float(meta.get("pressedAtSecond") or 15) - 4),
                                   "to": float(meta.get("pressedAtSecond") or 15)},
                        "shots": [], "confidence": "low",
-                       "checks": ["Claude couldn't tell what to report. Watch the clip and write it, or reject."]}]
+                       "checks": ["The analyst couldn't tell what to report. Watch the clip and write it, or reject."]}]
         ids = []
         base = time.time()
         for i, d in enumerate(drafts):
@@ -365,6 +429,7 @@ class Analyst(threading.Thread):
                 "shots": shots, "checks": checks, "confidence": d.get("confidence", "medium"),
                 "duplicate_of": dup if dup in st.tickets else None, "note": "",
                 "summary": data.get("clip_summary", ""),
+                "provider": st.clips[rel].get("provider"), "model": st.clips[rel].get("model"),
             }
             st.save_ticket(t)
             ids.append(tid)
@@ -396,3 +461,21 @@ def _read(path):
         return json.loads(Path(path).read_text())
     except Exception:
         return None
+
+
+def strict_schema(schema):
+    """Codex structured outputs require closed objects and all properties required."""
+    result = copy.deepcopy(schema)
+    def visit(node):
+        if node.get("type") == "object":
+            node["additionalProperties"] = False
+            node["required"] = list(node.get("properties", {}))
+            for child in node.get("properties", {}).values():
+                visit(child)
+        if "items" in node:
+            visit(node["items"])
+    visit(result)
+    # A null box means the analyst could not confidently locate the element.
+    box = result["properties"]["tickets"]["items"]["properties"]["shots"]["items"]["properties"]["box"]
+    box["type"] = ["array", "null"]
+    return result

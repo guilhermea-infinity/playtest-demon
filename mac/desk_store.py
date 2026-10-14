@@ -5,6 +5,7 @@
   QA-Inbox/Tickets/.work/<clip>/     the analyst's frames, overview sheet, transcript and raw output
   QA-Inbox/Handoffs/*.md             every prompt you copied for the programmer agent
 """
+import copy
 import datetime
 import json
 import os
@@ -55,6 +56,7 @@ class Store:
         for d in (self.root, self.handoff_dir, self.work):
             d.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self.settings = {"provider": "claude", "model": "", "paused": False, **read_json(self.root / "settings.json", {})}
         self.flags = {}  # auth state and the like, shown as banners in the page
         self.clips = read_json(self.root / "clips.json", {})
         self.handoffs = read_json(self.root / "handoffs.json", [])
@@ -87,8 +89,13 @@ class Store:
                     m = json.loads(line)
                 except Exception:
                     continue
+                if not isinstance(m, dict):
+                    continue
                 rel = m.get("file")
-                if not rel or rel in self.clips:
+                if not isinstance(rel, str) or not rel or rel in self.clips:
+                    continue
+                path = (self.inbox / rel).resolve()
+                if self.inbox.resolve() not in path.parents or path.suffix.lower() != ".mp4":
                     continue
                 self.clips[rel] = {"status": "skipped" if skip_existing else "queued", "meta": m,
                                    "queuedAt": time.time(), "tickets": []}
@@ -111,7 +118,7 @@ class Store:
         """Queue a clip again. With a hint, the drafts it made are put aside and the analyst is told what was wrong."""
         with self.lock:
             c = self.clips.get(rel)
-            if not c:
+            if not c or c.get("status") in ("working", "queued"):
                 return False
             if hint is not None:
                 for tid in c.get("tickets", []):
@@ -124,6 +131,36 @@ class Store:
             c.update(status="queued", queuedAt=time.time(), error=None)
             self._save_clips()
             return True
+
+    def configure(self, fields):
+        with self.lock:
+            provider = fields.get("provider", self.settings["provider"])
+            model = fields.get("model", self.settings["model"])
+            paused = fields.get("paused", self.settings["paused"])
+            if provider not in ("claude", "codex"):
+                raise ValueError("Choose Claude Code or Codex CLI")
+            if not isinstance(model, str) or len(model) > 120 or any(c.isspace() for c in model):
+                raise ValueError("Model must be a model ID without spaces, or blank for the CLI default")
+            if not isinstance(paused, bool):
+                raise ValueError("Paused must be true or false")
+            self.settings = {"provider": provider, "model": model, "paused": paused}
+            write_json(self.root / "settings.json", self.settings)
+            self.flags.pop("auth", None)
+            return dict(self.settings)
+
+    def config(self):
+        with self.lock:
+            return dict(self.settings)
+
+    def watch_inbox(self, stop):
+        # Discovery must continue while a provider spends minutes on an older clip.
+        while not stop.wait(1):
+            try:
+                self.sync_inbox()
+            except OSError as exc:
+                self.flags["inbox_error"] = str(exc)
+            else:
+                self.flags.pop("inbox_error", None)
 
     # ---- tickets ----
 
@@ -209,7 +246,8 @@ class Store:
             prompt = desk_handoff.render(ts, self.inbox)
             n = len(self.handoffs) + 1
             when = datetime.datetime.now()
-            name = f"{when:%Y-%m-%d %H.%M} {game} ({len(ts)}).md"
+            safe_game = re.sub(r"[^\w .()-]", "_", game)[:80]
+            name = f"H-{n:03d} {when:%Y-%m-%d %H.%M} {safe_game} ({len(ts)}).md"
             (self.handoff_dir / name).write_text(prompt)
             rec = {"id": f"H-{n:03d}", "game": game, "tickets": [t["id"] for t in ts], "file": f"Handoffs/{name}",
                    "at": now_iso(), "titles": [t["title"] for t in ts]}
@@ -259,7 +297,14 @@ class Store:
                             for rel, c in self.clips.items() if c.get("status") == "working"), None)
             failed = [{"clip": rel, "error": c.get("error"), "game": (c.get("meta") or {}).get("app")}
                       for rel, c in self.clips.items() if c.get("status") == "failed"]
-            return {
+            clips = []
+            for rel, c in sorted(self.clips.items(), key=lambda item: item[1].get("queuedAt", 0), reverse=True):
+                linked = [t for t in ts if t.get("clip") == rel]
+                clips.append({"clip": rel, **c, "draftIds": [t["id"] for t in linked if t["status"] == "draft"],
+                              "ticketCount": len([t for t in linked if t.get("rejectedWhy") != "redone"])})
+            return copy.deepcopy({
+                "clips": clips,
+                "settings": self.settings,
                 "drafts": drafts,
                 "trays": self.trays(),
                 "sent": [h for h in reversed(self.handoffs) if not h.get("undone")][:12],
@@ -268,7 +313,7 @@ class Store:
                 "queued": sum(1 for c in self.clips.values() if c.get("status") == "queued"),
                 "failed": failed,
                 "flags": dict(self.flags),
-            }
+            })
 
 
 def remove_tree(path):

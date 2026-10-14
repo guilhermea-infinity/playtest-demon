@@ -1,4 +1,9 @@
 #!/bin/bash
-# Double-click to start QA Desk: it receives clips from the phone, has Claude draft tickets, and opens the review page.
-# Leave this window open while you play; close it to stop.
-cd "$(dirname "$0")" && exec python3 mac/qa-desk.py "$@"
+set -euo pipefail
+cd "$(dirname "$0")"
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+if [[ ! -x .venv/bin/python ]]; then
+  echo 'First run: bash scripts/setup-mac.sh --brew (see README.md).'
+  exit 1
+fi
+exec .venv/bin/python mac/qa-desk.py "$@"

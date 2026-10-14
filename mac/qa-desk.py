@@ -4,14 +4,15 @@
   python3 ~/Desktop/qa-clip/mac/qa-desk.py
 
 1. Starts the inbox (qa-inbox.py), which receives clips from the phone.
-2. Runs the analyst: every new clip gets frames, a transcript and a Claude Code run that drafts tickets.
+2. Runs the analyst: every new clip gets frames, a transcript and a selected CLI run that drafts tickets.
 3. Serves the review page on http://127.0.0.1:8800 and opens it. Approve tickets one by one; approved tickets
    collect into one prompt per game that you copy or drag into your programmer agent.
 
-Needs ffmpeg, whisper-cli (optional, for your voice) and Claude Code signed in (`claude auth login`).
+Needs ffmpeg, optional whisper-cli for voice, and a signed-in Codex or Claude CLI.
 """
 import argparse
 import datetime
+import fcntl
 import os
 import signal
 import socket
@@ -49,8 +50,7 @@ def port_busy(port):
 
 def start_inbox(inbox):
     if port_busy(8799):
-        say("The inbox is already running (port 8799), so I'm using that one.")
-        return None
+        raise RuntimeError("Port 8799 is occupied. Stop the existing receiver, or use --no-inbox after confirming it writes to this inbox.")
     p = subprocess.Popen([sys.executable, "-u", str(HERE / "qa-inbox.py"), "--inbox", str(inbox)],
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
@@ -65,10 +65,12 @@ def start_inbox(inbox):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Receive QA clips, draft tickets with Claude, review them.")
+    ap = argparse.ArgumentParser(description="Receive QA clips, draft tickets with Claude Code or Codex CLI, review them.")
     ap.add_argument("--inbox", default="~/Desktop/QA-Inbox")
     ap.add_argument("--port", type=int, default=8800, help="review page port (this Mac only)")
-    ap.add_argument("--model", default="opus", help="Claude model for the analyst (default: opus)")
+    ap.add_argument("--provider", choices=("claude", "codex"), help="CLI to analyse clips (saved in this inbox)")
+    ap.add_argument("--model", help="Model ID; empty string uses the CLI default")
+    ap.add_argument("--paused", action="store_true", help="Receive clips without starting new analyses")
     ap.add_argument("--from-now", action="store_true", help="don't analyse clips that are already in the inbox")
     ap.add_argument("--no-inbox", action="store_true", help="don't start the phone receiver")
     ap.add_argument("--no-open", action="store_true", help="don't open the review page")
@@ -76,18 +78,37 @@ def main():
 
     inbox = Path(os.path.expanduser(a.inbox))
     inbox.mkdir(parents=True, exist_ok=True)
+    # Hold this descriptor for the lifetime of the process, before touching state.
+    inbox_lock = (inbox / ".desk.lock").open("a+")
+    try:
+        fcntl.flock(inbox_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        ap.error(f"Another QA Desk is already using {inbox}")
     store = Store(inbox)
+    config = {}
+    if a.provider:
+        config.update(provider=a.provider, model="")
+    if a.model is not None:
+        config["model"] = a.model
+    if a.paused:
+        config["paused"] = True
+    if config:
+        store.configure(config)
     tools = desk_analyst.find_tools()
-
-    child = None if a.no_inbox else start_inbox(inbox)
-    desk_analyst.Analyst(store, tools, a.model, say, notify, skip_existing=a.from_now).start()
+    store.flags["tools"] = {k: bool(v) for k, v in tools.items()}
+    store.sync_inbox(skip_existing=a.from_now)
+    stop_event = threading.Event()
 
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), desk_server.make_handler(store, a.port))
     srv.daemon_threads = True
+    child = None if a.no_inbox else start_inbox(inbox)
+    threading.Thread(target=store.watch_inbox, args=(stop_event,), daemon=True).start()
+    analyst = desk_analyst.Analyst(store, tools, say, notify, stop_event)
+    analyst.start()
     url = f"http://127.0.0.1:{a.port}"
     missing = [n for n, k in (("ffmpeg", "ffmpeg"), ("whisper-cli", "whisper"), ("a whisper model", "whisper_model"),
-                              ("claude", "claude")) if not tools[k]]
-    print(f"\nQA Desk is on.\n  Review page  {url}\n  Clips        {inbox}\n  Analyst      Claude ({a.model})"
+                              (store.config()["provider"], store.config()["provider"])) if not tools[k]]
+    print(f"\nQA Desk is on.\n  Review page  {url}\n  Clips        {inbox}\n  Analyst      {store.config()['provider']} ({store.config()['model'] or 'CLI default'})"
           + (f"\n  Missing      {', '.join(missing)}" if missing else "")
           + "\nLeave this window open while you play. Ctrl+C to stop.\n", flush=True)
     if not a.no_open:
@@ -103,6 +124,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        stop_event.set()
+        analyst.cancel_provider()
         srv.server_close()
         if child:
             child.terminate()

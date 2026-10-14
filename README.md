@@ -1,134 +1,181 @@
 # QA Clip
 
-Play any game on an Android phone. When something breaks, press **Vol +**. The last 15 seconds, plus everything
-until you press **Vol +** again, land on your Mac as a video named after the game. Talk while you play: your voice
-is in the clip.
+**Catch a bug on Android. Review a ticket on your Mac. Hand it to your coding agent.**
 
-On the Mac, **QA Desk** has Claude watch each clip as it arrives and draft tickets. You approve them one by one, and
-the approved ones become a single prompt for your programmer agent, ready to copy or drag.
+QA Clip records the last 15 seconds before you press Volume Up and keeps recording until you press it again. Your voice goes with the video. QA Desk receives clips over USB or Wi-Fi, analyses them through **Codex CLI or Claude Code**, and turns findings into editable tickets.
 
-| Button | While playing |
-|---|---|
-| **Vol +** | Start a clip. It already holds the 15 s before the press, and keeps recording. |
-| **Vol +** again | Stop. The clip goes to the Mac. |
-| **Vol −** while recording | Throw that clip away. |
+**Android 10+ phones · macOS laptops · Python 3.10+ · local files · bring your own CLI login**
 
-Outside a session, and Vol − when no clip is recording, the buttons change the volume as normal.
-A small pill in the top-left shows `● REC 0:23`, then `Saved` or `Thrown away`. The phone also buzzes:
-one tick = recording, two ticks = saved, one long buzz = thrown away.
+![The live video queue](docs/images/videos.png)
 
-## Setup (once)
+## The workflow
 
-1. **Mac:** double-click `QA Desk.command`. Leave that window open while you play. The review page opens in your
-   browser at http://127.0.0.1:8800.
-   The first time, also run `claude auth login` in Terminal, so the desk can use Claude Code. Until you do, clips
-   wait in the queue.
-2. **Phone:** plug it in with USB debugging on, then run `bash ~/Desktop/qa-clip/mac/install-phone.sh`.
-   You can also copy `out/QAClip-0.1.0.apk` to the phone and open it there.
-3. In QA Clip, tap **Volume buttons → Turn on**, and switch on **QA Clip volume buttons**.
-   If that switch is greyed out, go to Settings → Apps → QA Clip → ⋮ → **Allow restricted settings**, then try again.
-4. The first time the phone finds the Mac over Wi-Fi, the Mac asks **Allow?** Click Allow. Phones on USB are trusted
-   without asking.
+1. **Capture.** Start a QA Clip session on Android and play your game. Press **Volume Up** when you see something; press again to finish. **Volume Down** discards an active clip.
+2. **Follow the queue.** Videos appear automatically after transfer completes, even while another video is being analysed. The Videos view shows queued, extracting, transcribing, analysing, ready, and failed clips. Search by game, filter by status, pause the queue, or retry a failed clip.
+3. **Review one ticket.** Watch the relevant moment, edit the finding, inspect screenshots, then approve, reject, or leave it for later. Edits save automatically. Approval and rejection have Undo.
+4. **Hand off.** Approved tickets collect by game. Copy or drag a prompt into your coding agent. Prompts include reproduction steps, acceptance criteria, and local paths to evidence. Every handoff is saved; copying again does not overwrite earlier handoffs.
 
-## Each session
+![One ticket at a time](docs/images/review.png)
 
-Open QA Clip → **Start session** → **Share screen**. The app gets out of the way. Open the game and play.
-When you're done, tap **Stop session**, either in the app or in the notification.
+Analysis runs **one video at a time**, in arrival order. Receiving, queue updates, and ticket review continue independently. Closing QA Desk stops processing; unfinished work is queued again on the next launch. Pausing lets the current analysis finish and holds subsequent videos.
 
-## How clips reach the Mac
+## Install with your agent
 
-The phone tries three routes, in this order, with no setup:
-1. The Mac it reached last time.
-2. Bonjour on the Wi-Fi: the Mac announces itself, and the phone finds it by name.
-3. A USB cable: the inbox runs `adb reverse` on any plugged-in phone. Use this on office Wi-Fi that blocks
-   phone-to-Mac traffic.
+Give Codex or Claude Code this prompt:
 
-If the Mac can't be reached (it's asleep, you're on the train, the inbox is closed), clips wait on the phone
-("2 waiting") and send by themselves once the Mac is back. The phone deletes nothing until the Mac confirms it got
-every byte, and keeps the last 20 sent clips as a backup.
+> Install QA Clip from https://github.com/guilhermea-infinity/qa-clip on my Mac and Android phone. Read AGENTS.md and docs/INSTALL-AGENT.md first. Inspect existing tools and preserve my clips and settings. Ask which CLI and model I want to use, install the missing dependencies, build the Android APK, and install it on my chosen USB-connected phone. Walk me through the Android permissions and verify a short test clip reaches QA Desk and becomes a reviewable ticket. Leave me the launch command and explain anything you could not verify.
 
-## Where clips land
+The detailed [agent installation runbook](docs/INSTALL-AGENT.md) includes prerequisites, exact commands, human permission steps, verification, and recovery. This repository does not support iOS, Windows, or Linux desktop installation yet.
 
+## Manual quick start
+
+```bash
+git clone https://github.com/guilhermea-infinity/qa-clip.git
+cd qa-clip
+bash scripts/setup-mac.sh --brew
 ```
+
+This uses Homebrew for Python, ffmpeg, whisper.cpp, Java 21 and Android platform tools, and creates an isolated `.venv`. Install [Homebrew](https://brew.sh/) first if needed. Without `--brew`, the script installs only the Python dependencies.
+
+Install and sign in to **one** provider:
+
+```bash
+# OpenAI / ChatGPT through Codex CLI
+npm install -g @openai/codex
+codex login
+
+# Or Claude Code
+npm install -g @anthropic-ai/claude-code
+claude auth login
+```
+
+The npm commands require Node.js; `brew install node` if absent. See the [Codex CLI documentation](https://developers.openai.com/codex/cli/) and [Claude Code setup](https://code.claude.com/docs/en/setup) for other installation methods.
+
+Launch your chosen provider:
+
+```bash
+./QA\ Desk.command --provider codex
+# or
+./QA\ Desk.command --provider claude --model sonnet
+```
+
+The browser opens at **http://127.0.0.1:8800**. After initial setup, double-click **QA Desk.command**. Keep its Terminal window open while testing.
+
+**Choose a model:** open the analyst settings at the top right. Choose Codex or Claude and enter any **vision-capable model ID available to your account**. Leave the field blank to use that CLI's configured default. Settings persist per inbox and apply to the next video. The provider and model used are recorded with each new analysis. No API key is needed when using the CLI's supported subscription login; provider access and usage limits still apply.
+
+### Enable voice transcription
+
+Voice is transcribed locally by whisper.cpp before analysis. Install a multilingual model for your preferred balance of speed and accuracy:
+
+```bash
+mkdir -p "$HOME/.cache/whisper"
+curl -fL --retry 3 \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin \
+  -o "$HOME/.cache/whisper/ggml-small.bin"
+```
+
+This downloads roughly 466 MB. Alternatively set `QA_WHISPER_MODEL=/absolute/path/to/ggml-model.bin`. Existing medium/small models in the documented cache locations are detected automatically. Without whisper or its model, visual analysis still works, but spoken instructions are unavailable to the analyst.
+
+### Install on Android
+
+For a prebuilt APK, download it from [Releases](https://github.com/guilhermea-infinity/qa-clip/releases), verify the published SHA-256, and put it in `out/`. Or build locally:
+
+1. Install Android Studio, then SDK Platform **36** and Build Tools **35.0.0** in SDK Manager. Java 21 was installed by the setup script.
+2. Set `ANDROID_HOME` if the SDK is not at `~/Library/Android/sdk`.
+3. On your phone, enable Developer options and USB debugging. Connect by USB and approve the computer's debugging prompt.
+
+```bash
+./build.sh
+./mac/install-phone.sh
+# With multiple phones: ./mac/install-phone.sh SERIAL
+```
+
+On the phone:
+
+- Enable **QA Clip volume buttons** in Accessibility settings. If blocked for a sideloaded app, use Settings → Apps → QA Clip → ⋮ → **Allow restricted settings**, then return to Accessibility.
+- Allow microphone access and notifications when requested.
+- Tap **Start session** and approve Android's screen-sharing prompt. Choose the whole screen when Android offers a choice.
+- Open your game. Press Volume Up to start a clip, speak about the issue, and press Volume Up again to send it.
+
+The phone tries the last reachable Mac, Bonjour on Wi-Fi, then USB (`adb reverse`). A new Wi-Fi phone requires approval on the Mac. USB connections are trusted. Clips wait on the phone if the Mac is offline, and only become sent after the Mac acknowledges the complete transfer. The last 20 sent clips remain on the phone.
+
+## Review controls
+
+| Action | Control |
+| --- | --- |
+| Approve and move on | **A**, or **⌘ Enter / Ctrl Enter** while editing |
+| Reject | **R**, with Undo |
+| Leave for later | **L** |
+| Move between tickets | Previous / Next |
+| Reanalyse with a correction | “Redo this clip with a hint” |
+| Inspect a screenshot | Click it; Escape closes it |
+| Remove a screenshot from the handoff | Drop, or Use to restore |
+
+Letter shortcuts only operate in Review, outside text fields and dialogs. Redo replaces that clip's unapproved drafts while preserving already approved tickets.
+
+## Commands and diagnostics
+
+```bash
+.venv/bin/python scripts/doctor.py --provider codex
+.venv/bin/python mac/qa-desk.py --help
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+| Option | Effect |
+| --- | --- |
+| `--provider claude\|codex` | Select and save a provider; resets the model to CLI default unless supplied |
+| `--model MODEL` | Select and save an explicit model; `--model ""` restores CLI default |
+| `--inbox DIR` | Use a different data directory |
+| `--paused` | Start receiving without starting new analyses |
+| `--from-now` | Skip previously unseen clips already in the inbox; does not erase existing work |
+| `--no-inbox` | Use an independently running receiver |
+| `--port N` | Change the local review port (default 8800) |
+| `--no-open` | Start without opening a browser |
+
+A failed analysis shows its error and a Retry button. If sign-in expires, clips wait until the selected CLI is signed in. Unknown models and quota errors remain visible rather than silently falling back to another provider. Full CLI output and extracted evidence are retained in `Tickets/.work/` for diagnosis.
+
+## Files, privacy, and backup
+
+Code and data live separately:
+
+```text
+qa-clip/
+  android/                Java Android recorder (no third-party app libraries)
+  mac/                    receiver, queue, analyst, server, UI
+  mac/prompts/            ticket and handoff instructions
+  scripts/                setup and prerequisite checker
+  tests/                  queue, provider, review and HTTP regression tests
+  docs/INSTALL-AGENT.md   complete installation runbook
+  out/                    locally built APKs (ignored by Git)
+
 ~/Desktop/QA-Inbox/
-  Club Empire/
-    2026-10-14 15.59.24.mp4    the clip
-    2026-10-14 15.59.24.json   game, version, device, pressedAtSecond, clipSeconds, voice
-  inbox.jsonl                  one line per clip, oldest first
-  Tickets/
-    CE-001/                    ticket.json, shot-1.png (red box), shot-1-clean.png
-    clips.json                 which clips were analysed, and any errors
-    .work/                     Claude's frames, sheet, transcript and raw answer, per clip
-  Handoffs/                    every prompt you copied, as .md
+  <Game>/                 videos and metadata
+  inbox.jsonl             completed clip arrivals
+  Tickets/clips.json      durable queue
+  Tickets/settings.json   provider, model and pause preference
+  Tickets/<ID>/           ticket.json and screenshots
+  Tickets/.work/          extracted frames, transcript, prompt, provider output
+  Handoffs/               saved prompts
 ```
 
-`pressedAtSecond` is where in the video you pressed Vol +. The thing you saw happened just before that point.
+Approved Wi-Fi phone keys are stored in `~/.config/qa-clip/devices.json`. CLI credentials remain in each CLI's own storage. **Do not commit inbox data, pairing keys, credentials, APK signing keys, or machine-specific SDK paths.** The repository's `.gitignore` excludes generated files and local configuration; your inbox needs its own backup.
 
-## Tickets: from clip to programmer
+Videos are transferred locally over plain HTTP; use trusted Wi-Fi or USB. The review server only listens on loopback. **Selected frames, transcript and ticket context are sent to the chosen AI provider through its CLI**, under that provider's terms and account settings. Codex runs in its read-only sandbox; Claude gets only Read and Glob tools. Model output is validated before ticket generation. Copying a handoff marks it as handed off locally; QA Clip does not send it to GitHub or any other person. Cloud coding agents cannot access the local evidence paths; share evidence separately if needed.
 
-1. **Claude drafts.** For each new clip, the desk:
-   - pulls a frame every 0.5 s, plus an overview sheet;
-   - transcribes your voice with whisper;
-   - runs Claude Code headless (`claude -p`, Opus by default), once per clip.
+## Current limits
 
-   Claude looks at the frames, matches them against what you said, and writes 1 to 3 tickets. Each ticket has
-   where, now, want, steps, done when, your quote, and up to 3 screenshots with a red box on the element.
-   A 30 s clip takes about a minute.
-2. **You review**, one ticket at a time, with the clip playing at the right moment. You can edit any field and
-   drop a screenshot. The orange "Check before approving" box lists anything Claude wasn't sure about, for example
-   you said "left" when the buttons are on the right.
-   - **A** approves.
-   - **R** rejects (there's an Undo).
-   - **L** leaves it for later.
-   - **⌘↵** approves even while you're typing.
-   - If Claude misread the clip, use *Redo this clip with a hint* to re-draft it with your correction.
-3. **Hand off.** Approved tickets collect on the right, one prompt per game.
-   - **Copy prompt** copies the prompt. **⠿ Drag** lets you drop it into your agent's chat, or onto Finder as a
-     `.md` file.
-   - The prompt has every ticket plus the full paths to its screenshots and clip, so an agent running on this Mac
-     can open them itself. An agent in the cloud can't see your files.
-   - Each hand-off is saved in `QA-Inbox/Handoffs/`. **Sent → Copy again** copies an old one.
+- Android 10 or newer; Android only. Volume-button capture was originally tested on an OPPO A16 / Android 11. Other manufacturers may intercept the buttons differently.
+- Android requires screen-sharing consent each session. On Android 15+, locking the phone ends capture.
+- Captures use the session's initial size/orientation, at 720 px wide in portrait. Start the session in the game's orientation; rotation during recording can letterbox the video.
+- Clips cap at three minutes. Audio is from the microphone; game audio is not captured.
+- Screens are analysed as sampled frames plus a transcript, not as native video input. Brief animation or timing bugs may be missed and should be checked by the reviewer.
+- One analysis at a time. Long clips and local transcription can take several minutes; provider runs time out after 15 minutes.
+- Builds are debug APKs for sideloading, not Play Store releases. Locally built APKs use your machine's debug signing key. A signature mismatch must not be “fixed” by uninstalling without the owner's approval; uninstalling deletes phone-side clips.
 
-To change what Claude is told, edit `mac/prompts/analyst.md` (how it drafts) or `mac/prompts/handoff.md` (the
-intro your programmer agent gets). Both take effect on the next clip or copy.
+## Development
 
-## Prototype limits
+For a synthetic UI demo without provider usage, run `.venv/bin/python scripts/demo.py --inbox /tmp/qa-clip-demo`, then `./QA\ Desk.command --inbox /tmp/qa-clip-demo --no-inbox --paused --port 8812`. Use a fresh directory; the demo never overwrites an existing inbox.
 
-- Android only, sideloaded. It needs Android 10 or later.
-- Android asks "Share screen?" once per session. On Android 15 and later, locking the phone ends the session.
-  A clip that is recording when that happens is saved.
-- The capture size is fixed when the session starts (720 px wide, in portrait). If you rotate to landscape
-  mid-session, the clip is letterboxed. Start the session in the game's orientation.
-- One clip is capped at 3 minutes. At the cap it saves by itself.
-- Your voice comes from the phone mic; game sound is not captured.
-- The volume buttons were tested on an OPPO A16 (Android 11). Other phone makers' software could still grab them
-  first.
-- QA Desk only drafts while its window is open. Clips that arrive while it's closed are drafted the next time you
-  start it.
-- Each clip is one Claude Code run on your plan, so it counts toward your usage. A 30 s clip reads about 10 frames.
+Read [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md). CI runs the Python regression tests, validates frontend JavaScript syntax and builds the Android APK. The [architecture guide](docs/ARCHITECTURE.md) explains the transfer protocol and lifecycle.
 
-## Files
-
-- `android/`: the phone app. Plain Java, no libraries. Rebuild with `./build.sh`.
-- `mac/qa-desk.py`: QA Desk. It starts the inbox, the analyst and the review page. Options:
-  - `--model sonnet`: use a different Claude model.
-  - `--from-now`: skip the clips already in the inbox.
-  - `--port N`: serve the review page on another port.
-  - `--no-inbox`: don't start the inbox.
-  - `--no-open`: don't open the review page.
-- `mac/desk_*.py`, `mac/desk-ui/index.html`, `mac/prompts/`: the analyst, the review page and the two prompts.
-- `mac/qa-inbox.py`: the inbox on its own. Python standard library only. Options: `--inbox DIR`, `--port N`,
-  `--no-usb`.
-- Approved phones are stored in `~/.config/qa-clip/devices.json`. Delete a line there to un-pair a phone.
-
-## What lives outside this folder
-
-All the code is here. These are tools on the Mac that it uses, and what you'd install on a new Mac:
-
-- Claude Code, signed in (`claude auth login`).
-- `brew install ffmpeg whisper-cpp`, plus a whisper model at `~/.cache/whisper/ggml-medium.bin`. Without
-  whisper-cli the desk still works, but Claude can't hear you.
-- Pillow for Python 3 (`python3 -m pip install --user pillow`), for the contact sheet and the red boxes.
-- To rebuild the phone app or install it over USB: `brew install openjdk@21` and the Android SDK
-  (`~/Library/Android/sdk`, which Android Studio sets up). `android/local.properties` points at it.
-- Your data is in `~/Desktop/QA-Inbox`, not here: clips, `Tickets/` and `Handoffs/`.
+MIT license for project code. The Gradle wrapper retains its original Apache-2.0 notices.
