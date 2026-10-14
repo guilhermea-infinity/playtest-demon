@@ -7,6 +7,9 @@
 """
 import copy
 import datetime
+import difflib
+import hashlib
+import statistics
 import json
 import os
 import re
@@ -130,7 +133,11 @@ class Store:
         """Queue a clip again. With a hint, the drafts it made are put aside and the analyst is told what was wrong."""
         with self.lock:
             c = self.clips.get(rel)
-            if not c or c.get("status") in ("working", "queued"):
+            if not c or c.get("status") in ("working", "queued", "deleted"):
+                return False
+            if any(t.get("runId") for t in self.tickets.values() if t.get("clip") == rel):
+                return False
+            if hint is None and any(t.get("status") in ("draft", "approved", "sent", "fixing", "fixed") for t in self.tickets.values() if t.get("clip") == rel):
                 return False
             if hint is not None:
                 for tid in c.get("tickets", []):
@@ -204,7 +211,7 @@ class Store:
     def update_ticket(self, tid, fields):
         with self.lock:
             t = self.tickets.get(tid)
-            if not t:
+            if not t or t.get("runId"):
                 return None
             for k in TEXT_FIELDS:
                 if isinstance(fields.get(k), str):
@@ -225,15 +232,18 @@ class Store:
             return t
 
     def set_status(self, tid, status):
-        allowed = {"draft": ("approved", "rejected"), "approved": ("draft", "rejected"), "rejected": ("draft",)}
+        allowed = {"fixed": ("verified", "draft"), "verified": ("draft",), "draft": ("approved", "rejected"), "approved": ("draft", "rejected"), "rejected": ("draft",)}
         with self.lock:
             t = self.tickets.get(tid)
-            if not t or status not in allowed.get(t["status"], ()):
+            if not t or t.get("runId") or status not in allowed.get(t["status"], ()):
+                return None
+            if status == "approved" and not all(str(t.get(k, "")).strip() for k in ("title", "want", "done_when")):
                 return None
             t["status"] = status
             if status == "approved":
                 t["approvedAt"] = now_iso()
             if status == "draft":
+                t.pop("duplicateOf", None)
                 t["order"] = time.time()  # back in the queue, at the end
             self.save_ticket(t)
             return t
@@ -307,6 +317,74 @@ class Store:
         except Exception:
             return None
 
+    # ---- recoverable deletion, duplicate evidence and estimates ----
+
+    def trash_clip(self, rel, restore=False):
+        with self.lock:
+            c = self.clips.get(rel)
+            if not c:
+                raise ValueError("Video not found")
+            linked = [t for t in self.tickets.values() if t.get("clip") == rel]
+            if c.get("status") == "working" or any(t.get("runId") or t.get("status") == "sent" for t in linked):
+                raise ValueError("This video is in active analysis or a submitted batch. Keep its evidence until the batch is finished.")
+            if restore:
+                if c.get("status") != "deleted":
+                    raise ValueError("Video is not in trash")
+                c["status"] = c.pop("previousStatus", "skipped")
+                for t in linked:
+                    if t.get("status") == "deleted":
+                        t["status"] = t.pop("previousStatus", "draft")
+                        self.save_ticket(t)
+            else:
+                if c.get("status") == "deleted":
+                    return True
+                c.update(previousStatus=c["status"], status="deleted", deletedAt=now_iso())
+                for t in linked:
+                    t.update(previousStatus=t["status"], status="deleted")
+                    self.save_ticket(t)
+            self._save_clips()
+            return True
+
+    def duplicate_candidates(self, tid):
+        with self.lock:
+            t = self.tickets.get(tid)
+            if not t:
+                return []
+            result = []
+            text = lambda x: re.sub(r"[^a-z0-9 ]", "", x.get("title", "").lower())
+            for other in self.tickets.values():
+                if other["id"] == tid or other["game"] != t["game"] or other.get("runId") or other["status"] in ("deleted", "rejected", "duplicate"):
+                    continue
+                score = difflib.SequenceMatcher(None, text(t), text(other)).ratio()
+                if score >= .78 or t.get("duplicate_of") == other["id"]:
+                    result.append({"id": other["id"], "title": other["title"], "status": other["status"], "score": round(score, 2)})
+            return sorted(result, key=lambda x: x["score"], reverse=True)[:5]
+
+    def link_duplicate(self, tid, target):
+        with self.lock:
+            t, other = self.tickets.get(tid), self.tickets.get(target)
+            if not t or not other or tid == target or t["game"] != other["game"]:
+                raise ValueError("Choose another ticket in the same game")
+            if t["status"] not in ("draft", "approved") or t.get("runId") or other.get("runId") or other["status"] in ("deleted", "rejected", "duplicate"):
+                raise ValueError("These tickets cannot be combined")
+            t.update(status="duplicate", duplicateOf=target)
+            self.save_ticket(t)
+            return t
+
+    def unlink_duplicate(self, tid):
+        with self.lock:
+            t = self.tickets.get(tid)
+            if not t or t["status"] != "duplicate":
+                raise ValueError("Ticket is not a duplicate")
+            t.update(status="draft", order=time.time())
+            t.pop("duplicateOf", None)
+            self.save_ticket(t)
+            return t
+
+    def timing(self):
+        recent = sorted([c for c in self.clips.values() if c.get("seconds") and c.get("status") == "done"], key=lambda c: c.get("doneAt", 0))[-10:]
+        return {"sampleCount": len(recent), "typicalSeconds": round(statistics.median(c["seconds"] for c in recent)) if recent else None}
+
     # ---- the page's view of everything ----
 
     def state(self):
@@ -321,6 +399,8 @@ class Store:
                       for rel, c in self.clips.items() if c.get("status") == "failed"]
             clips = []
             for rel, c in sorted(self.clips.items(), key=lambda item: item[1].get("queuedAt", 0), reverse=True):
+                if c.get("status") == "deleted":
+                    continue
                 linked = [t for t in ts if t.get("clip") == rel]
                 clips.append({"clip": rel, **c, "draftIds": [t["id"] for t in linked if t["status"] == "draft"],
                               "ticketCount": len([t for t in linked if t.get("rejectedWhy") != "redone"])})
@@ -328,7 +408,7 @@ class Store:
                 "clips": clips,
                 "settings": self.settings,
                 "games": games(self.inbox),
-                "drafts": drafts,
+                "drafts": [{**t, "duplicateCandidates": self.duplicate_candidates(t["id"])} for t in drafts],
                 "trays": self.trays(),
                 "sent": [h for h in reversed(self.handoffs) if not h.get("undone")][:12],
                 "rejected": [{"id": t["id"], "title": t["title"], "game": t["game"]} for t in rejected],
@@ -336,6 +416,12 @@ class Store:
                 "queued": sum(1 for c in self.clips.values() if c.get("status") == "queued"),
                 "failed": failed,
                 "flags": dict(self.flags),
+                "tickets": ts,
+                "trash": [{"clip": rel, "game": c.get("meta", {}).get("game") or c.get("meta", {}).get("app"), "deletedAt": c.get("deletedAt")} for rel, c in self.clips.items() if c.get("status") == "deleted"],
+                "timing": self.timing(),
+                "receiver": read_json(self.inbox / ".receiver.json", {}),
+                "repositories": read_json(self.root / "repositories.json", {}),
+                "runs": read_json(self.root / "runs.json", []),
             })
 
 

@@ -22,6 +22,7 @@ def main():
     checks += [(name, importlib.util.find_spec(name) is not None, True) for name in ['PIL', 'jsonschema']]
     checks += [('Voice transcription', bool(tools['whisper'] and tools['whisper_model']), False)]
     adb = shutil.which('adb') or str(Path.home() / 'Library/Android/sdk/platform-tools/adb')
+    checks += [('GitHub CLI for fix runs', bool(shutil.which('gh')), False), ('Git for fix runs', bool(shutil.which('git')), False)]
     checks += [('Android USB tools', Path(adb).is_file(), False)]
     if tools[args.provider]:
         command = ['auth', 'status'] if args.provider == 'claude' else ['login', 'status']

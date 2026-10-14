@@ -58,6 +58,11 @@ class GamesModelsTests(unittest.TestCase):
                 with patch.object(inbox, 'notify'):
                     with urlopen(Request(url+'/clip', data=b'synthetic-video', headers=headers)) as response:
                         rel = json.load(response)['file']
+                    with urlopen(Request(url+'/clip', data=b'synthetic-video', headers=headers)) as response:
+                        repeated = json.load(response)
+                    self.assertTrue(repeated['duplicate'])
+                    self.assertEqual(repeated['file'], rel)
+                    self.assertEqual(len((root/'inbox.jsonl').read_text().splitlines()), 1)
                 saved = json.loads((root / rel).with_suffix('.json').read_text())
                 self.assertEqual(saved['game'], 'My Game')
                 self.assertEqual(saved['appLabel'], 'Android Launcher')

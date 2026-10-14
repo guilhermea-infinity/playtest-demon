@@ -1,11 +1,11 @@
 # Install Playtest Demon for your owner
 
-You are installing an Android capture app and its macOS review desk. Complete the checks you can perform, guide the owner through Android permission prompts, and report what you actually verified. Do not claim an end-to-end phone test unless a real clip arrived and produced a ticket.
+You are installing a macOS playtest desk, an Android capture app if needed, and/or an iPhone recording import workflow. Complete the checks you can perform, guide the owner through Android permission prompts, and report what you actually verified. Do not claim an end-to-end phone test unless a real clip arrived and produced a ticket.
 
 ## 1. Inspect and choose
 
-- Confirm this is macOS and the phone is Android 10+. Other laptop operating systems and iOS are not supported.
-- Inspect `python3`, `brew`, `node`, `ffmpeg`, `ffprobe`, `whisper-cli`, `claude`, `codex`, Java, `adb`, and the Android SDK. Reuse working installations.
+- Confirm this is macOS. Android capture needs Android 10+. iPhone/iPad uses built-in screen recording and AirDrop; follow [IOS.md](IOS.md) and skip Android installation/permissions. Other laptop operating systems are not supported.
+- Inspect `python3`, `brew`, `node`, `ffmpeg`, `ffprobe`, `whisper-cli`, `claude`, `codex`, Java, `git`, `gh`, `adb`, and the Android SDK. Reuse working installations.
 - Ask the owner to choose **Codex CLI or Claude Code**, a model or CLI default, the installation directory, and the inbox location if their preferences are not already known. Do not switch providers because one lacks credentials.
 - Check for an existing Playtest Demon (formerly QA Clip / QA Demon) installation and `~/Desktop/QA-Inbox`. Preserve data, settings and pairing keys. Back up the existing inbox before migration. Never put it inside the Git repository.
 - Inspect `adb devices`. If several devices are connected, select the owner's intended serial explicitly. An `unauthorized` device needs the owner's approval on the phone.
@@ -16,6 +16,7 @@ Clone the repository into an owner-approved directory. From that directory:
 
 ```bash
 bash scripts/setup-mac.sh --brew
+# iOS-only: bash scripts/setup-mac.sh --brew --ios
 ```
 
 The script installs Homebrew packages and Python dependencies in `.venv`. If Homebrew is missing, guide the owner through its official installation at https://brew.sh; do not assume administrator access. For existing dependencies, omit `--brew` to set up only Python.
@@ -44,7 +45,7 @@ An alternate model path can be supplied with `QA_WHISPER_MODEL`. This environmen
 
 Run `.venv/bin/python scripts/doctor.py --provider codex` (or `claude`). Resolve required missing tools; explicitly report if voice transcription is unavailable.
 
-## 3. Build and install Android
+## 3. Build and install Android (skip for iOS)
 
 Use Android Studio's SDK Manager to install Android SDK Platform 36 and Build Tools 35.0.0. Its usual macOS SDK location is `~/Library/Android/sdk`. Set `ANDROID_HOME` if different. With command-line SDK tools already available, the equivalent is:
 
@@ -63,7 +64,7 @@ Alternatively, download the versioned APK and checksum file from this repository
 
 If Android reports `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the installed app uses a different signing key. Stop before uninstalling: that would erase unsent clips. Ask the owner to export/send the clips first or use an APK built with the original signing key. Keep the same local debug key for future local upgrades.
 
-## 4. Guide the owner through phone permissions
+## 4. Guide the owner through Android permissions (skip for iOS)
 
 These are owner actions, not permissions an agent should silently grant:
 
@@ -84,16 +85,18 @@ Do not disable platform protections or change unrelated accessibility services.
 
 Use `--inbox /absolute/path` for a custom inbox. Open http://127.0.0.1:8800. If the port is occupied, identify the existing process before changing it. Only one desk may manage a given inbox.
 
-- Confirm Videos loads. Open analyst settings, refresh the installed CLI’s model list, and confirm the owner’s provider, model, and supported effort. Keep CLI default if preferred; do not silently substitute an unlisted saved model.
+- Confirm Live feed loads. Open analyst settings, refresh the installed CLI’s model list, and confirm the owner’s provider, model, and supported effort. Keep CLI default if preferred; do not silently substitute an unlisted saved model.
 - Add a harmless test game by name on either device and verify it appears on the other. Select it on the phone; desktop selection filters the workspace independently.
 - Explain Lookback: 0–30 seconds before the first press, 10 suggested to catch bugs noticed moments after they happen. Use 0 for no pre-roll. Change it before starting the session. The session must run long enough to fill the requested window.
 - Ask the owner to record a harmless 5–10 second clip: Volume Up, describe one visible change request, then Volume Up again.
 - Confirm the phone finishes sending and a card appears in Videos. New cards should continue appearing while another clip is analysed.
 - Confirm the card moves through extraction, transcription and provider analysis to Ready to review, or shows a specific actionable error.
 - Open Review. Confirm the selected game label, lookback/press timing, video playback, the spoken quote if audio is enabled, screenshots and editable fields.
-- With the owner's test ticket, verify edit → approve → Handoffs → preview/copy. Do not post a ticket to an external issue tracker.
+- With the owner's test ticket, verify edit → approve → Approved batches → preview/copy. Copying does not submit the batch. For an authorized fixing run, follow [FIX-RUNS.md](FIX-RUNS.md): connect the owner’s game repo, verify `gh auth status`, choose a test command and fixing model, send an approved test batch, and inspect its PR. Leave auto-merge off unless the owner opts in. Do not substitute another repo or publish unapproved findings.
 - If Wi-Fi is desired, disconnect USB, approve the new phone pairing dialog on the Mac, and repeat. Some office Wi-Fi blocks local discovery; USB remains a valid fallback.
 - Stop the test session on the phone. Explain how to start the next one.
+
+For iOS verification, record a harmless spoken request with the system microphone enabled, AirDrop it, import the MOV in the desk, and verify transcription, review, approval and the batch. A synthetic MOV check is not a physical iPhone test.
 
 ## 6. Leave a clear handover
 
@@ -110,6 +113,10 @@ Give the owner the repository path, inbox path, chosen CLI/model, exact launch c
 | No Wi-Fi arrival | Same trusted network, Mac firewall approval, pairing dialog, Bonjour allowed. Try USB. |
 | Clip waits on phone | Keep Playtest Demon running and the Mac awake. The phone retries automatically. |
 | Empty review | Videos may still be processing or the queue may be paused. Review has only unapproved drafts. |
+| Interrupted fix run | Work stays in `AgentRuns/`. Recover publication for a verified commit, or return the requests to approval and start a new batch. Never rerun/publish silently. |
+| No fixing PR | Check repository settings, GitHub login, test output and the run log. Failed checks or unaddressed requests stop publication. |
+| Auto-merge refused | Require branch checks, enable repository auto-merge and check GitHub permissions. Do not bypass protections. |
+| iPhone import fails | Trim below 10 min / 750 MB, use MOV/MP4, and verify ffmpeg. |
 | Interrupted analysis | Restart Playtest Demon; working clips become queued. Check `.work/` logs if it repeatedly fails. |
 | Python import error | Rerun `bash scripts/setup-mac.sh` and launch through Playtest Demon.command, which uses `.venv`. |
 

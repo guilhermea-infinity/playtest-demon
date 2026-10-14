@@ -20,7 +20,7 @@ def mmss(t):
 
 def build_of(t):
     dev = t.get("device") or "phone"
-    a = f", Android {t['android']}" if t.get("android") else ""
+    a = f", Android {t['android']}" if t.get("android") else (", " + t["platform"] if t.get("platform") else "")
     return f"{t.get('version') or 'unknown version'} on {dev}{a}"
 
 

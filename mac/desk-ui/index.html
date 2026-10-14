@@ -1,460 +1,443 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Playtest Demon</title>
-<link rel="icon" type="image/svg+xml" href="/devil.svg">
-<link rel="stylesheet" href="/app.css">
-</head>
-<body>
-<header>
-  <a class="brand" href="#videos"><img class="brandmark devil" src="/devil.svg" alt=""><span class="brand-copy"><small>INFINITY GAMES</small>Playtest <b>Demon</b></span></a>
-  <nav aria-label="Workspace"><button id="nav-videos" onclick="go('videos')">Videos <span id="videoCount">0</span></button><button id="nav-review" onclick="go('review')">Review <span id="reviewCount">0</span></button><button id="nav-handoffs" onclick="go('handoffs')">Handoffs <span id="handoffCount">0</span></button></nav>
-  <button class="settings-button" onclick="openSettings()">⚙ <span id="engineLabel">Analyst settings</span></button>
-</header>
-<div class="connection"><div class="status" id="status" role="status"></div><span>Android → Mac → your coding agent</span></div>
-<div id="banner"></div>
-<div class="gamebar"><label for="gamePicker">GAME</label><select id="gamePicker" onchange="pickGame(this.value)"><option value="">All games</option></select><button class="text-button" onclick="addGameOpen()">+ Add game</button><span id="gameScope" class="hint">Your whole QA workspace</span></div>
-<dialog id="gameDialog"><form onsubmit="event.preventDefault(); addGame()"><div class="dialog-top"><h2>Add a game</h2><button type="button" aria-label="Close" onclick="$('#gameDialog').close()">✕</button></div><p>Just a name. It will also appear on your connected phone.</p><label for="newGame">Game name</label><input id="newGame" required maxlength="80" placeholder="e.g. Dominate Lands" autocomplete="off"><div class="dialog-actions"><button type="button" class="btn" onclick="$('#gameDialog').close()">Cancel</button><button class="btn go">Add & select</button></div></form></dialog>
-<section id="videosView" class="view">
-  <div class="page-heading"><div><div class="eyebrow">INFINITY GAMES / QA WORKSPACE</div><h1>Catch it. Fix it. Keep playing.</h1><p>Record on your phone. Follow the analysis here. Review when you're ready.</p></div><button class="btn go" onclick="go('review')">Review tickets <span id="reviewCTA">→</span></button></div>
-  <div id="stats" class="stats"></div>
-  <div class="toolbar"><div class="filters" role="group" aria-label="Filter videos"><button data-filter="all" onclick="filterClips('all')">All videos</button><button data-filter="active" onclick="filterClips('active')">In progress</button><button data-filter="review" onclick="filterClips('review')">To review</button><button data-filter="failed" onclick="filterClips('failed')">Needs attention</button></div><input id="clipSearch" type="search" aria-label="Search videos" placeholder="Search game or clip…" oninput="renderClips()"><button id="pause" class="btn" onclick="togglePause()">Pause queue</button></div>
-  <div id="clipGrid" class="clip-grid"></div>
-</section>
-<main id="main" class="view" hidden><div id="review"></div></main>
-<section id="handoffsView" class="view" hidden><div class="page-heading"><div><div class="eyebrow">READY FOR YOUR CODING AGENT</div><h1>From approved to actionable.</h1><p>One prompt per game, with the evidence and acceptance criteria included.</p></div></div><aside id="side"></aside></section>
-<dialog id="settingsDialog"><form onsubmit="event.preventDefault(); saveSettings()"><div class="dialog-top"><h2>Choose your analyst</h2><button type="button" aria-label="Close settings" onclick="$('#settingsDialog').close()">✕</button></div><p>Changes apply to the next video. The current analysis finishes with its original model.</p><label for="provider">Provider</label><select id="provider" onchange="loadModels()"><option value="claude">Claude Code</option><option value="codex">Codex CLI · OpenAI / ChatGPT</option></select><div class="model-heading"><label for="model">Model</label><button type="button" class="text-button" onclick="loadModels(true, $('#model').value, $('#effort').value)">↻ Refresh models</button></div><select id="model" onchange="renderEfforts()"></select><p id="modelDescription" class="hint"></p><label for="effort">Reasoning effort</label><select id="effort"></select><p id="modelStatus" class="hint" role="status"></p><div id="toolStatus" class="hint"></div><div class="dialog-actions"><button type="button" class="btn" onclick="$('#settingsDialog').close()">Cancel</button><button id="saveAnalyst" class="btn go">Save settings</button></div></form></dialog>
-<dialog id="clipDialog"><div class="dialog-top"><h2 id="clipTitle">Clip</h2><button aria-label="Close video" onclick="closeClip()">✕</button></div><video id="clipVideo" controls playsinline></video><p id="clipSummary"></p></dialog>
-<div id="toast" role="status"></div>
-<div id="lightbox" role="dialog" aria-label="Screenshot preview" onclick="this.classList.remove('on')"><img alt="Ticket evidence"></div>
-
-<script>
-const $ = (s, el = document) => el.querySelector(s);
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-const media = rel => '/media/' + rel.split('/').map(encodeURIComponent).join('/');
-const mmss = t => { t = Math.max(0, Math.round(+t || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
-const clipName = rel => (rel || '').split('/').pop().replace(/\.mp4$/, '');
-const KINDS = ['bug', 'change', 'polish', 'crash', 'idea'], PRIOS = ['high', 'normal', 'low'];
-
-let selectedGame = localStorage.getItem('qa-game') || '', modelCatalog = [], modelRequest = 0;
-const gameOf = c => c.meta.game || c.meta.appLabel || c.meta.app || c.clip.split('/')[0];
-const drafts = () => S.drafts.filter(t => !selectedGame || t.game === selectedGame);
-let S = null, lastJSON = '', cur = null, dirty = {}, saveTimer = null, dragging = false;
-let view = ['videos','review','handoffs'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'videos', clipFilter = 'all', acting = false, saving = Promise.resolve();
-
-async function api(path, body) {
-  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
-  const result = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(result.error || 'Could not save. Please retry.');
-  return result;
-}
-
-async function poll() {
-  try {
-    const r = await fetch('/api/state', {cache: 'no-store'});
-    if (!r.ok) throw new Error('Connection failed');
-    const txt = await r.text();
-    if (txt !== lastJSON && !dragging) { lastJSON = txt; S = JSON.parse(txt); render(); }
-    else if (S) renderStatus();
-  } catch (e) { $('#status').innerHTML = '<span class="fail">Playtest Demon isn\'t running. Start it with Playtest Demon.command.</span>'; }
-}
-setInterval(poll, 1500);
-poll();
-
-// ---------- top bar ----------
-
-function renderStatus() {
-  const w = S.working;
-  let h;
-  if (w) {
-    const secs = Math.round(Date.now() / 1000 - (w.startedAt || Date.now() / 1000));
-    const game = w.meta?.game || w.meta?.appLabel || w.meta?.app || '';
-    h = `<span class="spin"></span><span>${esc(w.step || 'Working')} · ${esc(game)} ${esc(clipName(w.clip).slice(11))} · ${mmss(secs)}</span>`;
-    if (S.queued) h += `<span>· ${S.queued} more waiting</span>`;
-  } else if (S.settings.paused) {
-    h = `<span class="dot paused"></span><span>Queue paused · incoming clips will wait</span>`;
-  } else if (S.queued && ['signed-out','missing'].includes(S.flags.auth)) {
-    h = `<span class="fail">${S.queued} clip${S.queued > 1 ? 's' : ''} waiting for the analyst</span>`;
-  } else if (S.queued) {
-    h = `<span class="spin"></span><span>${S.queued} clip${S.queued > 1 ? 's' : ''} waiting</span>`;
-  } else {
-    h = `<span class="dot"></span><span>Waiting for clips from the phone</span>`;
-  }
-  $('#status').innerHTML = h;
-}
-
-function render() {
-  renderStatus();
-  renderGames();
-  const nd = drafts().length, na = S.trays.filter(t => !selectedGame || t.game === selectedGame).reduce((n, t) => n + t.ids.length, 0);
-  $('#videoCount').textContent = S.clips.filter(c => !selectedGame || gameOf(c) === selectedGame).length; $('#reviewCount').textContent = nd; $('#handoffCount').textContent = na;
-  $('#reviewCTA').textContent = nd ? `(${nd}) →` : '→';
-  $('#engineLabel').textContent = (S.settings.provider === 'codex' ? 'Codex' : 'Claude') + ' · ' + (S.settings.model || 'CLI default') + (S.settings.effort ? ' · ' + S.settings.effort : '');
-  document.title = (nd ? `(${nd}) ` : '') + 'Playtest Demon';
-
-  const auth = S.flags.auth, provider = S.settings.provider, login = provider === 'codex' ? 'codex login' : 'claude auth login';
-  $('#banner').innerHTML = ['signed-out','missing'].includes(auth) ? `<div class="banner"><span>${esc(provider)} ${auth === 'missing' ? 'is not installed' : 'needs sign-in'}. Clips are safely queued. ${auth === 'missing' ? 'Follow the setup guide, then sign in.' : `Run <code>${login}</code> in Terminal.`}</span><button class="mini" onclick="openSettings()">Change analyst</button></div>` : '';
-  if (S.flags.inbox_error) $('#banner').innerHTML += `<div class="banner">Inbox: ${esc(S.flags.inbox_error)}</div>`;
-  renderView();
-}
-
-function renderView() {
-  $('#videosView').hidden = view !== 'videos'; $('#main').hidden = view !== 'review'; $('#handoffsView').hidden = view !== 'handoffs';
-  for (const name of ['videos','review','handoffs']) { const b = $('#nav-' + name); b.classList.toggle('on', view === name); b.setAttribute('aria-current', view === name ? 'page' : 'false'); }
-  if (view === 'videos') renderClips();
-  if (view === 'review') renderReview();
-  if (view === 'handoffs') renderSide();
-}
-async function go(name) {
-  if (view === 'review') { try { await flush(); } catch { return; } $('#vid')?.pause(); }
-  view = name; history.replaceState(null, "", "#" + name); if (S) renderView(); window.scrollTo(0, 0);
-}
-window.addEventListener('hashchange', () => { const name = location.hash.slice(1); if (['videos','review','handoffs'].includes(name) && name !== view) go(name); });
-function filterClips(value) { clipFilter = value; renderClips(); }
-function renderClips() {
-  const clips = S.clips.filter(c => !selectedGame || gameOf(c) === selectedGame), active = clips.filter(c => ['working','queued'].includes(c.status)).length;
-  const ready = clips.filter(c => c.draftIds.length).length, done = clips.filter(c => c.status === 'done' && !c.draftIds.length).length;
-  $('#stats').innerHTML = [[clips.length, 'Videos received'], [active, 'In the pipeline'], [drafts().length, 'Tickets to review'], [done, 'Videos reviewed']].map(([n,l]) => `<div class="stat"><strong>${n}</strong><span>${l}</span></div>`).join('');
-  $('#pause').textContent = S.settings.paused ? 'Resume queue' : 'Pause queue';
-  document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('on', b.dataset.filter === clipFilter));
-  const query = $('#clipSearch').value.trim().toLowerCase();
-  const shown = clips.filter(c => (clipFilter === 'all' || clipFilter === 'active' && ['working','queued'].includes(c.status) || clipFilter === 'review' && c.draftIds.length || clipFilter === 'failed' && c.status === 'failed') && (c.clip + ' ' + gameOf(c)).toLowerCase().includes(query));
-  $('#clipGrid').innerHTML = shown.map(c => {
-    const game = gameOf(c);
-    const status = c.status === 'done' ? (c.draftIds.length ? 'Ready to review' : 'Reviewed') : ({working: 'Analysing', queued: S.settings.paused ? 'Paused' : 'Queued', failed: 'Needs attention', skipped: 'Skipped'}[c.status] || c.status);
-    const preview = c.preview || drafts().find(t => t.clip === c.clip)?.shots?.[0]?.clean;
-    const step = c.status === 'working' ? c.step : c.status === 'queued' ? 'Starts automatically when the analyst is ready' : c.status === 'failed' ? c.error : c.summary || 'Waiting for your review';
-    return `<article class="clip-card ${c.status}"><button class="clip-cover" data-clip="${esc(c.clip)}" onclick="previewClip(this.dataset.clip)" aria-label="Play ${esc(game)} clip">${preview ? `<img src="${media(preview)}" loading="lazy" alt="">` : '<span class="placeholder">▶</span>'}<span class="play-overlay">▶ Watch clip</span><span class="duration">${mmss(c.meta.clipSeconds)}</span></button><div class="clip-body"><div class="clip-top"><span class="badge ${c.status}">${c.status === 'working' ? '<span class="spin"></span>' : ''}${status}</span><span class="hint">${c.ticketCount ? c.ticketCount + (c.ticketCount === 1 ? ' ticket' : ' tickets') : ''}</span></div><h2>${esc(game)}</h2><div class="clip-date">${esc(clipName(c.clip))}</div><p class="clip-step">${esc(step)}</p><div class="clip-footer"><span class="hint">${esc(c.provider ? c.provider + ' · ' + c.model : c.status === 'done' ? 'Analysis complete' : 'Awaiting analysis')}</span>${c.draftIds.length ? `<button class="text-button" data-id="${c.draftIds[0]}" onclick="reviewClip(this.dataset.id)">Review ${c.draftIds.length} →</button>` : ['failed','skipped'].includes(c.status) ? `<button class="text-button" data-clip="${esc(c.clip)}" onclick="retry(this.dataset.clip)">${c.status === 'failed' ? 'Retry analysis' : 'Analyse'}</button>` : ''}</div></div></article>`;
-  }).join('') || `<div class="empty"><div class="empty-icon">↥</div><h2>${clips.length ? 'No matching videos' : 'Your next finding starts on the phone'}</h2><p>${clips.length ? 'Try another filter or search.' : 'Start a Playtest Demon session on Android. Press Volume Up to capture a moment, then press again to send it here.'}</p></div>`;
-}
-async function reviewClip(id) { await go('review'); await openTicket(id); }
-function previewClip(rel) { const c = S.clips.find(c => c.clip === rel); $('#clipTitle').textContent = gameOf(c); $('#clipSummary').textContent = c.summary || c.step || 'Analysis has not finished yet.'; $('#clipVideo').src = media(rel); $('#clipDialog').showModal(); }
-function closeClip() { $('#clipVideo').pause(); $('#clipDialog').close(); }
-$('#clipDialog').addEventListener('close', () => $('#clipVideo').pause());
-function renderGames() {
-  const names = [...new Set([...(S.games || []), ...S.clips.map(gameOf), ...S.drafts.map(t => t.game)])].sort((a,b) => a.localeCompare(b));
-  if (selectedGame && !names.includes(selectedGame)) names.push(selectedGame);
-  const html = '<option value="">All games</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  if ($('#gamePicker').innerHTML !== html) $('#gamePicker').innerHTML = html;
-  $('#gamePicker').value = selectedGame;
-  $('#gameScope').textContent = selectedGame ? 'Videos, reviews & handoffs for this game' : 'Your whole QA workspace';
-}
-async function pickGame(name) {
-  try { await flush(); } catch { $('#gamePicker').value = selectedGame; return; }
-  $('#vid')?.pause(); selectedGame = name; localStorage.setItem('qa-game', name); cur = null; render();
-}
-function addGameOpen() { $('#newGame').value = ''; $('#gameDialog').showModal(); $('#newGame').focus(); }
-async function addGame() {
-  try {
-    const name = $('#newGame').value.trim().replace(/\s+/g, ' '), result = await api('/api/games', {name});
-    S.games = result.games; $('#gameDialog').close();
-    await pickGame(result.games.find(n => n.toLowerCase() === name.toLowerCase()) || name);
-    toast('Game added. Your phone syncs it when connected.');
-  } catch (e) { toast(e.message); }
-}
-function openSettings() {
-  if (!S) return;
-  $('#provider').value = S.settings.provider;
-  const t = S.flags.tools || {};
-  $('#toolStatus').textContent = ['ffmpeg','ffprobe','whisper','whisper_model','claude','codex'].map(k => `${k}: ${t[k] ? 'available' : 'not found'}`).join(' · ');
-  $('#settingsDialog').showModal(); loadModels(false, S.settings.model, S.settings.effort);
-}
-async function loadModels(refresh = false, selected = '', effort = '') {
-  const request = ++modelRequest, provider = $('#provider').value;
-  $('#model').disabled = $('#effort').disabled = $('#saveAnalyst').disabled = true;
-  $('#modelStatus').textContent = 'Reading models from your installed CLI…';
-  $('#model').innerHTML = '<option value="">Loading…</option>'; $('#effort').innerHTML = '';
-  try {
-    const response = await fetch('/api/models?provider=' + provider + (refresh ? '&refresh=1' : ''));
-    if (!response.ok) throw new Error('Could not read models');
-    const data = await response.json();
-    if (request !== modelRequest) return;
-    modelCatalog = data.models || [];
-    $('#model').innerHTML = '<option value="">Use CLI configured default</option>' + modelCatalog.map(m => `<option value="${esc(m.id)}">${esc(m.name)}${m.resolved ? ' · ' + esc(m.resolved) : ''}</option>`).join('');
-    if (selected && !modelCatalog.some(m => m.id === selected)) {
-      const option = new Option(selected + ' · saved selection (not listed)', selected); $('#model').add(option);
-    }
-    $('#model').value = selected;
-    renderEfforts(effort);
-    $('#modelStatus').textContent = data.error || 'Live CLI catalog. Access depends on your account; analysis will report any restriction.';
-  } catch (e) {
-    if (request !== modelRequest) return;
-    modelCatalog = []; $('#model').innerHTML = '<option value="">Use CLI configured default</option>';
-    if (selected) $('#model').add(new Option(selected + ' · saved selection', selected));
-    $('#model').value = selected; renderEfforts(effort); $('#modelStatus').textContent = e.message + '. Refresh to retry.';
-  } finally {
-    if (request === modelRequest) { $('#model').disabled = false; $('#saveAnalyst').disabled = false; }
-  }
-}
-function renderEfforts(selected = '') {
-  const m = modelCatalog.find(m => m.id === $('#model').value);
-  $('#modelDescription').textContent = m?.description || 'Uses your CLI configuration. Choose a listed model to customize effort.';
-  $('#effort').innerHTML = `<option value="">${m?.defaultEffort ? 'CLI default (model suggests ' + esc(m.defaultEffort) + ')' : 'CLI default effort'}</option>` + (m?.efforts || []).map(e => `<option value="${esc(e)}">${esc(e[0].toUpperCase()+e.slice(1))}</option>`).join('');
-  $('#effort').disabled = !m?.efforts?.length;
-  if (selected && !(m?.efforts || []).includes(selected)) $('#effort').add(new Option(selected + ' · saved setting (not listed)', selected));
-  $('#effort').value = selected || '';
-}
-async function saveSettings() {
-  try { await api('/api/settings', {provider: $('#provider').value, model: $('#model').value, effort: $('#effort').value}); $('#settingsDialog').close(); toast('Analyst saved. Applies to the next video.'); lastJSON = ''; await poll(); } catch (e) { toast(e.message); }
-}
-async function togglePause() { try { await api('/api/settings', {paused: !S.settings.paused}); lastJSON = ''; await poll(); } catch (e) { toast(e.message); } }
-
-
-// ---------- the review card ----------
-
-function renderReview() {
-  const box = $('#review');
-  if (!drafts().length) {
-    cur = null;
-    const busy = S.clips.some(c => (!selectedGame || gameOf(c) === selectedGame) && ['working','queued'].includes(c.status));
-    box.innerHTML = `<div class="empty"><h2>${busy ? 'Drafting tickets…' : 'You’re all caught up'}</h2>
-      <div>${busy ? 'Your analyst is processing the queue. New tickets will appear here automatically.' : 'Press Vol + on the phone when you see something. Every clip is drafted here by itself.'}</div></div>`;
-    return;
-  }
-  if (!drafts().find(t => t.id === cur)) { cur = drafts()[0].id; buildCard(); }
-  else if (!$('.card', box)) buildCard();
-  else { renderTabs(); requestAnimationFrame(sizeAll); }
-}
-
-function renderTabs() {
-  const el = $('#tabs');
-  if (!el) return;
-  const i = drafts().findIndex(t => t.id === cur);
-  el.innerHTML = `<button class="text-button" onclick="go('videos')">← Videos</button><span class="count">Ticket ${i + 1} of ${drafts().length}</span><div class="grow"></div><span class="hint">Edits save automatically</span><button class="btn compact" ${i === 0 ? 'disabled' : ''} onclick="openTicket('${drafts()[i-1]?.id}')">← Previous</button><button class="btn compact" ${i === drafts().length-1 ? 'disabled' : ''} onclick="openTicket('${drafts()[i+1]?.id}')">Next →</button>`;
-}
-
-async function openTicket(id) { try { await flush(); } catch { return; } cur = id; buildCard(); }
-
-function buildCard() {
-  const t = drafts().find(x => x.id === cur);
-  if (!t) return;
-  dirty = {};
-  const m = t.moment || {}, q = t.quote;
-  const low = t.confidence === 'low';
-  const area = (k, label, ph, val) => `<div class="field"><label for="field-${k}">${label}</label>
-    <textarea id="field-${k}" data-k="${k}" rows="1" placeholder="${ph}">${esc(val ?? t[k])}</textarea></div>`;
-  $('#review').innerHTML = `
-    <div class="tabs" id="tabs"></div>
-    <div class="card">
-      <div class="vcol">
-        <video id="vid" src="${media(t.clip)}" controls playsinline preload="auto" style="${t.frame ? `aspect-ratio:${t.frame[0]} / ${t.frame[1]}` : ''}"></video>
-        <div class="jumps">
-          <button class="jump" onclick="seek(${(m.from || 0) - 1.5})">▶ The moment ${mmss(m.from)}</button>
-          ${t.pressedAtSecond != null ? `<button class="jump" onclick="seek(${t.pressedAtSecond - 0.5})">You pressed ${mmss(t.pressedAtSecond)}</button>` : ''}
-          <button class="jump" onclick="seek(0)">From the start</button>
-        </div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Playtest Demon</title>
+    <link rel="icon" href="/devil.svg" />
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <aside class="rail">
+      <a
+        class="brand"
+        href="#videos"
+        onclick="event.preventDefault();go('videos')"
+        ><img src="/devil.svg" alt="" /><span
+          ><small>INFINITY GAMES</small>Playtest Demon</span
+        ></a
+      >
+      <div class="rail-caption">PLAYTEST WORKSPACE</div>
+      <nav aria-label="Workspace">
+        <button id="nav-videos" onclick="go('videos')">
+          <span>◉</span> Live feed <b id="videoCount">0</b></button
+        ><button id="nav-review" onclick="go('review')">
+          <span>▤</span> Review <b id="reviewCount">0</b></button
+        ><button id="nav-handoffs" onclick="go('handoffs')">
+          <span>▣</span> Approved batches <b id="handoffCount">0</b></button
+        ><button id="nav-runs" onclick="go('runs')">
+          <span>↗</span> Fix runs <b id="runCount">0</b></button
+        ><button id="nav-archive" onclick="go('archive')">
+          <span>↶</span> History & trash
+        </button>
+      </nav>
+      <div class="rail-bottom">
+        <div class="loop-mark">Speak. Review. Ship. Repeat.</div>
+        <p>Your observations stay connected to the fix.</p>
+        <button class="rail-help" onclick="openImport()">
+          ＋ Import · iPhone & desktop
+        </button>
       </div>
-      <div class="form">
-        <div class="meta"><b>${esc(t.id)}</b> · ${esc(t.game)} ${esc(t.version || '')} · clip ${esc(clipName(t.clip))}
-          · <span class="${low ? 'conf-low' : ''}">${esc(t.confidence || '')} confidence</span></div>
-        <textarea id="ticketTitle" aria-label="Ticket title" class="title" data-k="title" rows="1" placeholder="What's wrong, or what to change">${esc(t.title)}</textarea>
-        <div class="chips">
-          <span class="lab">Kind</span>${KINDS.map(k => `<button class="chip ${t.kind === k ? 'on' : ''}" data-set="kind" data-v="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}
-          <span class="lab">Priority</span>${PRIOS.map(k => `<button class="chip ${t.priority === k ? 'on' : ''} ${k}" data-set="priority" data-v="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}
+    </aside>
+    <div class="workspace">
+      <header>
+        <div class="breadcrumb" id="pageLabel">Live feed</div>
+        <div class="top-actions">
+          <span id="deskConnection" class="connection-pill">Connecting…</span
+          ><button class="settings-button" onclick="openSettings()">
+            ⚙ <span id="engineLabel">Analyst</span>
+          </button>
         </div>
-        ${t.checks && t.checks.length ? `<div class="checks"><b>Check before approving</b><ul>${t.checks.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
-        ${area('where', 'Where', 'Screen and position')}
-        ${area('now', 'Observed', 'What the game does now')}
-        ${area('want', 'Expected', 'What it should do instead')}
-        ${area('steps', 'Steps', 'Steps to reproduce, one per line (bugs only)', (t.steps || []).join('\n'))}
-        ${area('done_when', 'Acceptance', 'One thing the programmer can check')}
-        <div class="field quote"><label for="quote">You said ${q ? `<button class="mini" onclick="seek(${q.t - 0.5})">▶ ${mmss(q.t)}</button>` : ''}</label>
-          <textarea id="quote" data-k="quote" rows="1" placeholder="${q ? '' : 'No words matched to this ticket'}" ${q ? '' : 'disabled'}>${esc(q ? q.text : '')}</textarea></div>
-        <div class="field"><label>Shots</label><div class="shots">${(t.shots || []).map(s => `
-          <div class="shot ${s.use === false ? 'off' : ''}" data-file="${esc(s.file)}">
-            <div class="img" data-file="${esc(s.file)}" onclick="zoom(this.dataset.file)"><img src="${media(s.file)}" alt=""></div>
-            <div class="row"><button onclick="seek(${s.t - 0.5})">▶ ${mmss(s.t)}</button><button onclick="toggleShot(this)">${s.use === false ? 'Use' : 'Drop'}</button></div>
-            <div class="cap">${esc(s.caption)}</div></div>`).join('') || '<span class="hint" style="padding-top:7px">No screenshots</span>'}</div></div>
-        ${area('note', 'Note', 'Anything else for the programmer (optional)')}
-        <div class="redo">Need a better draft? <button onclick="redoOpen()">Redo this clip with a hint</button>
-          <div class="redo-box" id="redo" hidden><input id="redoHint" aria-label="Correction for the analyst" placeholder="e.g. I meant the buttons on the right edge, not the bottom bar" onkeydown="if (event.key === 'Enter') redo()">
-          <button class="btn" onclick="redo()">Redo</button></div></div>
-        <div class="actions">
-          <button class="btn reject" onclick="act('reject')">Reject<kbd>R</kbd></button>
-          <button class="btn" onclick="act('later')">Later<kbd>L</kbd></button>
-          <button class="btn go" onclick="act('approve')">Approve<kbd>A</kbd></button>
+      </header>
+      <div class="gamebar">
+        <div class="game-control">
+          <label for="gamePicker">GAME</label
+          ><select id="gamePicker" onchange="pickGame(this.value)">
+            <option value="">All games</option></select
+          ><button class="text-button" onclick="addGameOpen()">
+            ＋ Add game
+          </button>
         </div>
+        <button id="repoShortcut" class="text-button" onclick="connectRepo()">
+          Connect game repository ↗
+        </button>
       </div>
-    </div>`;
-  renderTabs();
-  sizeAll(); requestAnimationFrame(sizeAll);
-  document.querySelectorAll('.form [data-k]').forEach(el => el.addEventListener('input', () => {
-    if (el.tagName === 'TEXTAREA') autosize(el);
-    const k = el.dataset.k;
-    dirty[k] = k === 'steps' ? el.value.split('\n') : el.value;
-    clearTimeout(saveTimer); saveTimer = setTimeout(() => flush().catch(() => {}), 600);
-  }));
-  document.querySelectorAll('.chip[data-set]').forEach(el => el.addEventListener('click', () => {
-    document.querySelectorAll(`.chip[data-set="${el.dataset.set}"]`).forEach(c => c.classList.toggle('on', c === el));
-    dirty[el.dataset.set] = el.dataset.v; flush();
-  }));
-  const v = $('#vid');
-  v.addEventListener('loadedmetadata', () => {
-    sizeAll();
-    v.currentTime = Math.max(0, (m.from || 0) - 1.5);
-    // Let the reviewer choose when to play audio.
-  }, {once: true});
-}
+      <div id="banner"></div>
+      <section id="videosView" class="view">
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">THE PLAYTEST LOOP</div>
+            <h1>Play it. Say it. Make it better.</h1>
+            <p>
+              Every recording becomes a clear request. You decide what gets
+              built.
+            </p>
+          </div>
+          <div class="heading-actions">
+            <button class="btn" onclick="openImport()">
+              ＋ Import recording</button
+            ><button class="btn go" onclick="go('review')">
+              Review next <span id="reviewCTA">→</span>
+            </button>
+          </div>
+        </div>
+        <div id="stats" class="stats"></div>
+        <div class="pipeline-panel">
+          <div>
+            <div class="eyebrow">LIVE ANALYSIS</div>
+            <div id="status" role="status"></div>
+          </div>
+          <div id="phoneStatus" class="phone-status"></div>
+          <button id="pause" class="btn compact" onclick="togglePause()">
+            Pause queue
+          </button>
+        </div>
+        <div id="queueTiming" class="hint timing"></div>
+        <div class="toolbar">
+          <div class="filters" role="group" aria-label="Filter videos">
+            <button data-filter="all" onclick="filterClips('all')">
+              All recordings</button
+            ><button data-filter="active" onclick="filterClips('active')">
+              Processing</button
+            ><button data-filter="review" onclick="filterClips('review')">
+              To review</button
+            ><button data-filter="failed" onclick="filterClips('failed')">
+              Needs attention
+            </button>
+          </div>
+          <input
+            id="clipSearch"
+            type="search"
+            aria-label="Search recordings"
+            placeholder="Search recordings…"
+            oninput="renderClips()"
+          />
+        </div>
+        <div id="clipGrid" class="clip-grid"></div>
+      </section>
+      <main id="main" class="view" hidden><div id="review"></div></main>
+      <section id="handoffsView" class="view" hidden>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">YOUR APPROVAL IS THE STARTING LINE</div>
+            <h1>Ready to make it real.</h1>
+            <p>
+              Send an approved batch to an agent with access to your game
+              repository.
+            </p>
+          </div>
+        </div>
+        <aside id="side"></aside>
+      </section>
+      <section id="runsView" class="view" hidden>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">FROM OBSERVATION TO IMPLEMENTATION</div>
+            <h1>Follow every fix.</h1>
+            <p>
+              Isolated branches, verified changes, and a PR you can track to the
+              next playtest.
+            </p>
+          </div>
+        </div>
+        <div id="runs"></div>
+      </section>
+      <section id="archiveView" class="view" hidden>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">NOTHING LOST BY ACCIDENT</div>
+            <h1>History & recoverable trash.</h1>
+            <p>
+              Restore recordings, revisit rejected requests, or separate linked
+              duplicates.
+            </p>
+          </div>
+        </div>
+        <div id="archive"></div>
+      </section>
+    </div>
+    <dialog id="gameDialog">
+      <form onsubmit="event.preventDefault();addGame()">
+        <div class="dialog-top">
+          <h2>Add a game</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onclick="$('#gameDialog').close()"
+          >
+            ✕
+          </button>
+        </div>
+        <p>A name is all you need. It syncs to connected Android phones.</p>
+        <label for="newGame">Game name</label
+        ><input
+          id="newGame"
+          required
+          maxlength="80"
+          placeholder="e.g. Pocket Garden"
+          autocomplete="off"
+        />
+        <div class="dialog-actions">
+          <button type="button" class="btn" onclick="$('#gameDialog').close()">
+            Cancel</button
+          ><button class="btn go">Add game</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="settingsDialog">
+      <form onsubmit="event.preventDefault(); saveSettings()">
+        <div class="dialog-top">
+          <h2>Choose your analyst</h2>
+          <button
+            type="button"
+            aria-label="Close settings"
+            onclick="$('#settingsDialog').close()"
+          >
+            ✕
+          </button>
+        </div>
+        <p>
+          Changes apply to the next video. The current analysis finishes with
+          its original model.
+        </p>
+        <label for="provider">Provider</label
+        ><select id="provider" onchange="loadModels()">
+          <option value="claude">Claude Code</option>
+          <option value="codex">Codex CLI · OpenAI / ChatGPT</option>
+        </select>
+        <div class="model-heading">
+          <label for="model">Model</label
+          ><button
+            type="button"
+            class="text-button"
+            onclick="loadModels(true, $('#model').value, $('#effort').value)"
+          >
+            ↻ Refresh models
+          </button>
+        </div>
+        <select id="model" onchange="renderEfforts()"></select>
+        <p id="modelDescription" class="hint"></p>
+        <label for="effort">Reasoning effort</label
+        ><select id="effort"></select>
+        <p id="modelStatus" class="hint" role="status"></p>
+        <div id="toolStatus" class="hint"></div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="btn"
+            onclick="$('#settingsDialog').close()"
+          >
+            Cancel</button
+          ><button id="saveAnalyst" class="btn go">Save settings</button>
+        </div>
+      </form>
+    </dialog>
 
-function autosize(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
-function sizeAll() { document.querySelectorAll('.form textarea').forEach(autosize); }
-window.addEventListener('resize', sizeAll);
-function seek(t) { const v = $('#vid'); if (!v) return; v.currentTime = Math.max(0, t); v.play().catch(() => {}); }
-function zoom(file) { $('#lightbox img').src = media(file); $('#lightbox').classList.add('on'); }
-
-function toggleShot(btn) {
-  const sh = btn.closest('.shot');
-  sh.classList.toggle('off');
-  btn.textContent = sh.classList.contains('off') ? 'Use' : 'Drop';
-  dirty.useShots = [...document.querySelectorAll('.shot:not(.off)')].map(s => s.dataset.file);
-  flush();
-}
-
-async function flush() {
-  clearTimeout(saveTimer);
-  const id = cur, body = dirty; dirty = {};
-  const previous = saving;
-  saving = (async () => {
-    await previous.catch(() => {});
-    if (!id || !Object.keys(body).length) return;
-    try {
-      await api('/api/ticket/' + id, body);
-      const t = drafts().find(t => t.id === id); if (t) Object.assign(t, Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'quote' && k !== 'useShots')));
-    } catch (e) { if (cur === id) dirty = {...body, ...dirty}; toast('Changes not saved. ' + e.message); throw e; }
-  })();
-  return saving;
-}
-
-async function act(what) {
-  if (!cur || acting || view !== 'review' || document.querySelector('dialog[open]')) return;
-  acting = true;
-  document.querySelectorAll('.actions button').forEach(b => b.disabled = true);
-  try {
-    await flush();
-    const id = cur, i = drafts().findIndex(t => t.id === id), next = drafts()[i + 1] || drafts()[i - 1];
-    await api(`/api/ticket/${id}/${what}`);
-    if (what === 'approve') toast(`${id} approved. Find it in Handoffs.`, 'Undo', () => api(`/api/ticket/${id}/review`).then(poll));
-    if (what === 'reject') toast(`${id} rejected.`, 'Undo', () => api(`/api/ticket/${id}/review`).then(poll));
-    cur = what === 'later' ? (drafts().length > 1 ? next.id : id) : (next ? next.id : null);
-    lastJSON = ''; await poll();
-    if (cur && drafts().find(t => t.id === cur)) buildCard();
-  } catch (e) { toast(e.message); }
-  finally { acting = false; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); }
-}
-
-function redoOpen() { const r = $('#redo'); r.hidden = !r.hidden; if (!r.hidden) $('#redoHint').focus(); }
-async function redo() {
-  const t = drafts().find(x => x.id === cur);
-  const hint = $('#redoHint').value.trim();
-  if (!t || !hint) { $('#redoHint').focus(); return; }
-  await flush();
-  await api('/api/clip/retry', {clip: t.clip, hint});
-  toast('Redoing that clip with your hint. The new draft shows up here.');
-  cur = null; lastJSON = ''; poll();
-}
-
-// ---------- the right column: hand-off, sent, failed, rejected ----------
-
-function renderSide() {
-  let h = '<section><h3>Ready to hand off</h3>';
-  if (!S.trays.some(t => !selectedGame || t.game === selectedGame)) h += '<div class="hint">Approved tickets collect here as one prompt per game. Copy it, or drag it into your programmer agent.</div>';
-  S.trays.forEach((tr, i) => {
-    if (selectedGame && tr.game !== selectedGame) return;
-    const tickets = tr.tickets;
-    h += `<div class="tray"><div class="head"><b>${esc(tr.game)}</b><span>${tr.ids.length} ticket${tr.ids.length > 1 ? 's' : ''}</span></div>
-      ${tickets.map(t => `<div class="trow"><span class="id">${esc(t.id)}</span><span class="t">${esc(t.title)}</span>
-        <button title="Back to review" onclick="backToReview('${t.id}')">↩</button></div>`).join('')}
-      <div class="go"><button class="btn blue" onclick="copyTray(${i})">Copy prompt</button>
-        <div class="drag" draggable="true" data-tray="${i}" title="Drag into your agent's chat, or onto Finder for a .md file">⠿ Drag</div></div>
-      <details><summary>Preview the prompt</summary><pre>${esc(tr.prompt)}</pre></details></div>`;
-  });
-  h += '</section>';
-
-  if (S.failed.length) {
-    h += '<section><h3>Couldn\'t analyse</h3>' + S.failed.filter(f => !selectedGame || f.game === selectedGame).map(f => `<div class="srow"><div class="t">${esc(f.game || '')} ${esc(clipName(f.clip))}
-      <small class="fail" title="${esc(f.error)}">${esc(f.error)}</small></div><button data-clip="${esc(f.clip)}" onclick="retry(this.dataset.clip)">Retry</button></div>`).join('') + '</section>';
-  }
-  if (S.sent.length) {
-    h += '<section><h3>Sent</h3>' + S.sent.filter(s => !selectedGame || s.game === selectedGame).map(s => `<div class="srow"><div class="t">${esc(s.game)} · ${s.tickets.length} ticket${s.tickets.length > 1 ? 's' : ''}
-      <small>${esc(new Date(s.at).toLocaleString([], {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}))} · ${esc(s.tickets.join(', '))}</small></div>
-      <button onclick="copySent('${s.id}')">Copy again</button><button class="quiet" onclick="undoSent('${s.id}')">Undo</button></div>`).join('') + '</section>';
-  }
-  if (S.rejected.length) {
-    h += `<section><details class="rej"><summary>Rejected (${S.rejected.length})</summary>` + S.rejected.filter(r => !selectedGame || r.game === selectedGame).map(r => `<div class="srow"><div class="t">${esc(r.title)}
-      <small>${esc(r.id)} · ${esc(r.game)}</small></div><button onclick="restore('${r.id}')">Restore</button></div>`).join('') + '</details></section>';
-  }
-  const open = $('#side details.rej')?.open, pre = [...document.querySelectorAll('#side .tray details')].map(d => d.open);
-  $('#side').innerHTML = h;
-  if (open) $('#side details.rej').open = true;
-  document.querySelectorAll('#side .tray details').forEach((d, i) => { if (pre[i]) d.open = true; });
-  document.querySelectorAll('.drag').forEach(el => {
-    el.addEventListener('dragstart', e => {
-      const tr = S.trays[+el.dataset.tray];
-      e.dataTransfer.setData('text/plain', tr.prompt);
-      const name = `QA ${tr.game} (${tr.ids.length}).md`.replace(/[:/]/g, '-');
-      e.dataTransfer.setData('DownloadURL', `text/markdown:${name}:${location.origin}/api/tray.md?game=${encodeURIComponent(tr.game)}`);
-      e.dataTransfer.effectAllowed = 'copy';
-      el._tray = tr; dragging = true;
-    });
-    el.addEventListener('dragend', e => { dragging = false; if (e.dataTransfer.dropEffect !== 'none') commit(el._tray, 'Dropped'); });
-  });
-}
-
-async function copyText(txt) {
-  try { await navigator.clipboard.writeText(txt); return true; } catch (e) {}
-  const ta = document.createElement('textarea');
-  ta.value = txt; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
-  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
-  ta.remove(); return ok;
-}
-
-async function copyTray(i) {
-  const tr = S.trays[i];
-  if (await copyText(tr.prompt)) commit(tr, 'Copied');
-  else toast('The browser blocked the clipboard. Use Drag, or copy it from "Preview the prompt".');
-}
-
-async function commit(tr, verb) {
-  const r = await api('/api/handoff', {game: tr.game, ids: tr.ids});
-  const n = tr.ids.length;
-  if (r.ok) toast(`${verb} ${n} ${tr.game} ticket${n > 1 ? 's' : ''}. Paste into your programmer agent.`, 'Undo',
-    () => api(`/api/handoff/${r.handoff.id}/undo`).then(() => { lastJSON = ''; poll(); }));
-  lastJSON = ''; poll();
-}
-
-async function copySent(id) {
-  const txt = await (await fetch(`/api/handoff/${id}.md`)).text();
-  toast(await copyText(txt) ? 'Copied again.' : 'The browser blocked the clipboard.');
-}
-async function undoSent(id) { await api(`/api/handoff/${id}/undo`); toast('Back in "Ready to hand off".'); lastJSON = ''; poll(); }
-async function backToReview(id) { await api(`/api/ticket/${id}/review`); lastJSON = ''; poll(); }
-async function restore(id) { await api(`/api/ticket/${id}/review`); toast(`${id} is back in review.`); lastJSON = ''; poll(); }
-async function retry(clip) { await api('/api/clip/retry', {clip}); toast('Trying that clip again.'); lastJSON = ''; poll(); }
-
-let toastTimer;
-function toast(msg, label, fn) {
-  const el = $('#toast');
-  el.innerHTML = `<span>${esc(msg)}</span>` + (label ? `<button>${esc(label)}</button>` : '');
-  if (label) $('button', el).onclick = () => { el.classList.remove('on'); fn(); };
-  el.classList.add('on');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), label ? 7000 : 3500);
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { $('#lightbox').classList.remove('on'); document.activeElement.blur(); return; }
-  if (view !== 'review' || document.querySelector('dialog[open]')) return;
-  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); act('approve'); return; }
-  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-  if (typing || e.metaKey || e.ctrlKey || e.altKey || !cur) return;
-  const k = e.key.toLowerCase();
-  if (k === 'a') act('approve');
-  else if (k === 'r') act('reject');
-  else if (k === 'l') act('later');
-});
-window.addEventListener('beforeunload', e => { if (Object.keys(dirty).length) { e.preventDefault(); e.returnValue = ''; } });
-window.addEventListener('unhandledrejection', e => { e.preventDefault(); toast(e.reason?.message || 'The action failed. Please retry.'); });
-</script>
-</body>
+    <dialog id="clipDialog">
+      <div class="dialog-top">
+        <h2 id="clipTitle">Recording</h2>
+        <button aria-label="Close recording" onclick="closeClip()">✕</button>
+      </div>
+      <video id="clipVideo" controls playsinline></video>
+      <p id="clipSummary"></p>
+    </dialog>
+    <dialog id="confirmDialog">
+      <form onsubmit="event.preventDefault();confirmAction()">
+        <div class="dialog-top">
+          <h2 id="confirmTitle"></h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onclick="$('#confirmDialog').close()"
+          >
+            ✕
+          </button>
+        </div>
+        <p id="confirmText"></p>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="btn"
+            onclick="$('#confirmDialog').close()"
+          >
+            Keep it</button
+          ><button id="confirmButton" class="btn danger">Move to trash</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="duplicateDialog">
+      <form onsubmit="event.preventDefault();linkDuplicate()">
+        <div class="dialog-top">
+          <h2>Keep one request, all the evidence.</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onclick="$('#duplicateDialog').close()"
+          >
+            ✕
+          </button>
+        </div>
+        <p>
+          Link this finding to an existing ticket for the same game. It leaves
+          the approval queue; its observation and screenshots remain available
+          in history. You can undo this.
+        </p>
+        <label for="duplicateTarget">Existing request</label
+        ><select id="duplicateTarget" required></select>
+        <div id="duplicatePreview" class="hint"></div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="btn"
+            onclick="$('#duplicateDialog').close()"
+          >
+            Cancel</button
+          ><button class="btn go">Link as duplicate</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="importDialog">
+      <form onsubmit="event.preventDefault();importRecording()">
+        <div class="dialog-top">
+          <h2>Bring your playtest here.</h2>
+          <button type="button" aria-label="Close" onclick="closeImport()">
+            ✕
+          </button>
+        </div>
+        <div class="import-guide">
+          <span class="badge">iPhone / iPad</span>
+          <ol>
+            <li>
+              Open Control Center. Hold <b>Screen Recording</b>, turn
+              <b>Microphone On</b>, and start.
+            </li>
+            <li>
+              Play the game and describe each change out loud. Stop recording
+              when done.
+            </li>
+            <li>
+              In Photos, trim to the relevant moment, then
+              <b>Share → AirDrop → this Mac</b>.
+            </li>
+          </ol>
+          <p class="hint">
+            Record before playing: iOS imports have no rolling lookback or
+            volume-button trigger. Keep clips under 10 minutes / 750 MB.
+          </p>
+        </div>
+        <label for="importGame">Game</label
+        ><select id="importGame" required></select
+        ><label for="importPlatform">Recording source</label
+        ><select id="importPlatform">
+          <option value="iOS">iPhone / iPad</option>
+          <option value="Imported">Desktop or other device</option></select
+        ><label class="drop-zone" id="dropZone" for="importFile"
+          ><b id="fileName">Drop a recording here, or choose a file</b
+          ><span>MOV · MP4 · M4V · microphone audio is included</span
+          ><input
+            id="importFile"
+            type="file"
+            accept="video/mp4,video/quicktime,.mp4,.mov,.m4v"
+            required
+            onchange="$('#fileName').textContent=this.files[0]?.name || 'Choose a recording'"
+        /></label>
+        <p id="importStatus" role="status"></p>
+        <div class="dialog-actions">
+          <button type="button" class="btn" onclick="closeImport()">
+            Cancel</button
+          ><button id="importButton" class="btn go">Import & analyse</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="repoDialog">
+      <form onsubmit="event.preventDefault();saveRepo()">
+        <div class="dialog-top">
+          <h2 id="repoTitle">Connect your game</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onclick="$('#repoDialog').close()"
+          >
+            ✕
+          </button>
+        </div>
+        <p>
+          The agent starts from GitHub’s base branch in a fresh local clone.
+          Your working checkout stays separate. The desk creates the branch and
+          PR using your existing GitHub login.
+        </p>
+        <label for="repoGame">Game</label
+        ><select id="repoGame" onchange="fillRepo()"></select
+        ><label for="repoPath">Local repository folder</label
+        ><input
+          id="repoPath"
+          placeholder="/Users/you/Projects/my-game"
+          required
+        /><label for="repoBase">Base branch</label
+        ><input
+          id="repoBase"
+          placeholder="Remote default (usually main)"
+        /><label for="repoTest">Verification command</label
+        ><input id="repoTest" placeholder="e.g. npm ci && npm test" required />
+        <p class="hint">
+          Runs in each fresh clone. Include dependency setup if the project
+          needs it. No PR is published if this command fails.
+        </p>
+        <div class="form-grid">
+          <div>
+            <label for="repoProvider">Fixing agent</label
+            ><select id="repoProvider" onchange="repoModels()">
+              <option value="claude">Claude Code</option>
+              <option value="codex">Codex CLI</option>
+            </select>
+          </div>
+          <div>
+            <label for="repoModel">Model</label
+            ><select id="repoModel" onchange="repoEfforts()"></select>
+          </div>
+        </div>
+        <label for="repoEffort">Reasoning effort</label
+        ><select id="repoEffort"></select>
+        <p id="repoModelInfo" class="hint"></p>
+        <label class="check-label"
+          ><input id="repoAuto" type="checkbox" /> Queue PRs to merge
+          automatically</label
+        >
+        <p class="hint">
+          Opt in for this game. Requires GitHub checks, branch protection and
+          repository auto-merge. Stops on failing checks or changed PR commits.
+          Otherwise, review the PR and queue its merge from Fix runs.
+        </p>
+        <p id="repoError" class="fail" role="status"></p>
+        <div class="dialog-actions">
+          <button type="button" class="btn" onclick="$('#repoDialog').close()">
+            Cancel</button
+          ><button id="repoSave" class="btn go">Connect repository</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="runDialog">
+      <div class="dialog-top">
+        <h2 id="runTitle">Fix run</h2>
+        <button aria-label="Close" onclick="$('#runDialog').close()">✕</button>
+      </div>
+      <div id="runDetail"></div>
+      <details>
+        <summary>Agent & verification log</summary>
+        <pre id="runLog">Loading…</pre>
+      </details>
+    </dialog>
+    <div id="toast" role="status"></div>
+    <div
+      id="lightbox"
+      role="dialog"
+      tabindex="-1"
+      aria-label="Screenshot preview"
+      onclick="this.classList.remove('on')"
+    >
+      <button aria-label="Close screenshot">✕</button
+      ><img alt="Ticket evidence" />
+    </div>
+    <script src="/app.js"></script>
+  </body>
 </html>

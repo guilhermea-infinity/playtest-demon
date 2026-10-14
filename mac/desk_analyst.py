@@ -291,8 +291,10 @@ class Analyst(threading.Thread):
         opens = "\n".join(f"- {t['id']} ({t['status']}): {t['title']}" for t in open_t) or "(none)"
         hint = (f"\nThe tester rejected your first draft of this clip and said: \"{hint}\". Use that.\n") if hint else ""
         fill = {
+            "platform": meta.get("platform", "Android"),
+            "capture_instructions": "This is an imported recording. There was no hardware button press, lookback, or Playtest Demon REC overlay. Read the entire overview and follow the spoken request timings; 0 seconds is the start, not a reaction trigger." if meta.get("platform") in ("iOS", "Imported") else "The tester used the Android volume-button recorder and its configured lookback.",
             "game": game, "app": meta.get("app", "?"), "version": meta.get("appVersion") or meta.get("version") or "?",
-            "device": meta.get("device", "?"), "android": meta.get("android", "?"),
+            "device": meta.get("device", "?"), "android": meta.get("android") or meta.get("platform", "?"),
             "length": f"{dur:.1f}", "width": str(min(720, w)), "height": str(round(h * min(720, w) / w)),
             "pressed": f"{pressed:g}", "pressed_at": meta.get("pressedAt", "?"), "step": str(step),
             "transcript": said, "open_tickets": opens, "hint": hint,
@@ -419,7 +421,7 @@ class Analyst(threading.Thread):
             t = {
                 "id": tid, "status": "draft", "order": base + i / 1000, "created": now_iso(),
                 "game": game, "app": meta.get("app"), "version": meta.get("appVersion") or meta.get("version"),
-                "device": meta.get("device"), "android": meta.get("android"),
+                "device": meta.get("device"), "android": meta.get("android"), "platform": meta.get("platform", "Android"),
                 "clip": rel, "pressedAtSecond": meta.get("pressedAtSecond"), "clipSeconds": round(dur, 1), "frame": [w, h],
                 "kind": d.get("kind", "change"), "priority": d.get("priority", "normal"),
                 "title": str(d.get("title", "")).strip()[:200],

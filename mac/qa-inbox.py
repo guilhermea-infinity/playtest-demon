@@ -14,6 +14,8 @@ Standard library only.
 import argparse
 import datetime
 import json
+import hashlib
+import tempfile
 import os
 import re
 import shutil
@@ -110,6 +112,16 @@ class Devices:
 def make_handler(inbox, devices, name):
     log = inbox / "inbox.jsonl"
     log_lock = threading.Lock()
+    # The arrival log is the commit record: recover transfer identities after an ack/process loss.
+    uploads = {}
+    if log.exists():
+        for line in log.read_text().splitlines():
+            try:
+                record = json.loads(line)
+                if record.get('uploadHash'):
+                    uploads[record['uploadHash']] = record['file']
+            except (ValueError, AttributeError, KeyError):
+                pass
 
     class H(BaseHTTPRequestHandler):
         server_version = "QAInbox/0.1"
@@ -131,7 +143,14 @@ def make_handler(inbox, devices, name):
             if not re.fullmatch(r"[0-9a-f]{32}", key):
                 return "denied", dev
             usb = self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
-            return devices.status(key, dev, trusted=usb), dev
+            status = devices.status(key, dev, trusted=usb)
+            if status == "approved":
+                with log_lock:
+                    target = inbox / ".receiver.json"
+                    temp = target.with_suffix(".tmp")
+                    temp.write_text(json.dumps({"lastSeen": time.time(), "device": dev, "transport": "USB" if usb else "Wi-Fi"}))
+                    os.replace(temp, target)
+            return status, dev
 
         def do_GET(self):
             if self.path == '/games':
@@ -192,12 +211,12 @@ def make_handler(inbox, devices, name):
                 when = datetime.datetime.now()
             folder = inbox / game
             folder.mkdir(parents=True, exist_ok=True)
-            stem = f"{when:%Y-%m-%d %H.%M.%S}"
-            k = 2
-            while (folder / f"{stem}.mp4").exists():
-                stem = f"{when:%Y-%m-%d %H.%M.%S} ({k})"
-                k += 1
-            part = folder / f".{stem}.mp4.part"
+            handle, temp_name = tempfile.mkstemp(prefix='.upload-', suffix='.part', dir=folder)
+            os.close(handle)
+            part = Path(temp_name)
+            digest = hashlib.sha256()
+            digest.update(self.headers.get('X-QA-Key', '').encode())
+            digest.update(self.headers.get('X-QA-Name', '').encode())
             got = 0
             try:
                 with open(part, "wb") as f:
@@ -206,22 +225,35 @@ def make_handler(inbox, devices, name):
                         if not chunk:
                             break
                         f.write(chunk)
+                        digest.update(chunk)
                         got += len(chunk)
             except Exception:
                 pass
             if got != n:
                 part.unlink(missing_ok=True)
                 return self._json(400, {"ok": False, "error": "short", "bytes": got})
-            mp4 = folder / f"{stem}.mp4"
-            part.rename(mp4)
-
-            rel = str(mp4.relative_to(inbox))
-            meta.update({"file": rel, "fromDevice": dev, "receivedAt": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "bytes": got})
-            (folder / f"{stem}.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False))
-            with log_lock, open(log, "a") as f:
-                f.write(json.dumps({"file": rel, "game": chosen, "app": game, "version": meta.get("appVersion"), "pressedAt": meta.get("pressedAt"),
-                                    "pressedAtSecond": meta.get("pressedAtSecond"), "clipSeconds": meta.get("clipSeconds"),
-                                    "voice": meta.get("voice"), "receivedAt": meta["receivedAt"]}, ensure_ascii=False) + "\n")
+            upload_hash = digest.hexdigest()
+            with log_lock:
+                existing = uploads.get(upload_hash)
+                if existing and (inbox / existing).is_file():
+                    part.unlink(missing_ok=True)
+                    return self._json(200, {"ok": True, "bytes": got, "file": existing, "duplicate": True})
+                stem = f"{when:%Y-%m-%d %H.%M.%S}"
+                k = 2
+                while (folder / f"{stem}.mp4").exists():
+                    stem = f"{when:%Y-%m-%d %H.%M.%S} ({k})"
+                    k += 1
+                mp4 = folder / f"{stem}.mp4"
+                part.rename(mp4)
+                rel = str(mp4.relative_to(inbox))
+                meta.update({"file": rel, "fromDevice": dev, "receivedAt": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "bytes": got, "uploadHash": upload_hash})
+                (folder / f"{stem}.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False))
+                with open(log, "a") as f:
+                    f.write(json.dumps({"file": rel, "game": chosen, "app": game, "version": meta.get("appVersion"), "pressedAt": meta.get("pressedAt"),
+                                        "pressedAtSecond": meta.get("pressedAtSecond"), "clipSeconds": meta.get("clipSeconds"), "uploadHash": upload_hash,
+                                        "voice": meta.get("voice"), "receivedAt": meta["receivedAt"]}, ensure_ascii=False) + "\n")
+                    f.flush(); os.fsync(f.fileno())
+                uploads[upload_hash] = rel
             secs = meta.get("clipSeconds")
             say(f"Clip in: {rel}  ({secs} s, {got / 1e6:.1f} MB)")
             notify("QA clip in", f"{game} · {secs} s")

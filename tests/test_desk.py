@@ -33,7 +33,7 @@ class DeskTests(unittest.TestCase):
 
     def ticket(self, tid='GA-001'):
         t = {'id': tid, 'game': 'Game', 'clip': 'Game/clip.mp4', 'title': 'A finding', 'status': 'draft',
-             'kind': 'bug', 'priority': 'normal', 'shots': [], 'steps': [], 'moment': {}, 'order': 1}
+             'kind': 'bug', 'priority': 'normal', 'want': 'Requested behavior', 'done_when': 'Requested behavior works', 'shots': [], 'steps': [], 'moment': {}, 'order': 1}
         self.store.save_ticket(t)
         return t
 

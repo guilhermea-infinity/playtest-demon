@@ -4,7 +4,7 @@
 
 The Android MediaProjection foreground service buffers encoded screen frames. A Volume Up press retains the configured 0–30 seconds (default 10) and begins the marked recording; the next press finishes it. Accessibility listens for the hardware buttons. Microphone audio accompanies the screen; internal game audio is not captured.
 
-The uploader retries local clips through the last endpoint, Bonjour (`_qaclip._tcp`), and USB reverse forwarding to port 8799. Each request has a device key and clip metadata. Unknown Wi-Fi keys require an owner-approved pairing dialog; loopback connections through USB are trusted. The receiver writes a `.part` file, checks its length, renames it, writes metadata, and appends to `inbox.jsonl` before acknowledging. Only completed arrivals enter the analysis queue.
+The uploader retries local clips through the last endpoint, Bonjour (`_qaclip._tcp`), and USB reverse forwarding to port 8799. Each request has a device key and clip metadata. Unknown Wi-Fi keys require an owner-approved pairing dialog; loopback connections through USB are trusted. The receiver writes a `.part` file, checks its length, renames it, writes metadata, and appends to `inbox.jsonl` before acknowledging. Only completed arrivals enter the analysis queue. Streaming transfer hashes and the fsynced arrival log deduplicate Android retries after an acknowledgement loss, including concurrent transfers; temporary filenames are unique.
 
 For nonzero lookback, the ring starts at the newest keyframe at or before the requested boundary. At zero, no pre-roll is retained: the muxer waits for a newly requested sync frame and sets the press offset to zero. Changing lookback/voice requires stopping the session. Game selection is snapshotted when the clip starts; changing it later cannot relabel a clip in progress.
 
@@ -31,3 +31,23 @@ Ticket states: draft → approved/rejected; either can return to draft. An expor
 ## Boundaries
 
 The receiver is reachable on the local network; the review server is loopback-only and checks Host/Origin. Media paths must stay inside the inbox. Pairing uses device keys, but Wi-Fi transport is not encrypted; use a trusted network or USB. The selected provider receives extracted images/transcript/context. Local logs and inbox files may contain private content and are excluded from Git.
+
+## iOS / desktop import
+
+`POST /api/import` streams bounded raw MOV/MP4/M4V bytes into a temporary folder. Host/Origin checks apply before reading. SHA-256 detects identical imports, including concurrent submissions. ffprobe requires a video track and a duration below 10 minutes; ffmpeg converts to H.264/AAC MP4 with faststart while retaining audio. Under the Store lock, the completed file, sidecar and fsynced arrival log are written before queue discovery. No interrupted upload is queued. A hash of an item in recoverable trash does not prevent the owner importing it again.
+
+Imported metadata identifies iOS/Imported and a zero press offset. The analyst prompt explicitly excludes Android trigger/lookback/REC-overlay assumptions. The system recorder is the shipped iOS capture mechanism; there is no native iOS executable in this repository.
+
+## Fix batches
+
+`desk_runs.Runs` owns a separate single worker and durable `Tickets/runs.json`. `POST /api/run` reserves approved requests under Store’s lock and persists their immutable snapshot; states proceed queued → preparing → fixing → testing → publishing → pr_ready → merge_queued → merged. Failures/interruption stay reserved for explicit recovery or cancellation. An open PR/active or unresolved failed run blocks new runs for that repository. Startup reconciles reservations and marks interrupted work, without rerunning an agent.
+
+Each run clones the remote base into `AgentRuns/<ID>/repo`, copies selected evidence, invokes its configured CLI and requires every request to be accounted for. The desk reruns the configured checks and verifies the agent did not switch branches/commits. It removes evidence/helpers, creates a commit, pushes only the new branch and creates/reuses the PR by head branch. Saved verified commits can recover publication without another inference.
+
+PR refresh records GitHub state; merge requires the original commit and required status checks and delegates to GitHub auto-merge without admin bypass. Merged requests become fixed; only human playtest confirmation makes them verified. Closed PRs return requests to approved. Reopening a fix retains its previous run ID.
+
+## Review recovery
+
+Trash is a durable soft deletion of a clip and its requests. Restoring returns their prior states; originals remain on disk. Active/submitted evidence cannot be trashed. Duplicate suggestions compare titles and provider hints; linking is human-controlled, scoped to a game, and reversible. A duplicate retains its own ticket/evidence and links to a canonical request. Copying a prompt is a pure export and no longer marks requests sent; older handoff state remains readable/reversible.
+
+Receiver contact contains only device display name, transport and timestamp, separate from pairing keys. Desk process health, receiver availability and recent authenticated phone contact are separate UI signals. Estimates use the median duration of the last ten completed clips after at least three samples; the UI shows a range with an uncertainty explanation.

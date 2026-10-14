@@ -8,6 +8,9 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from desk_games import games
 from desk_models import catalog
+from desk_import import import_recording
+import subprocess
+from urllib.parse import unquote
 
 HERE = Path(__file__).resolve().parent
 UI = HERE / "desk-ui" / "index.html"
@@ -18,7 +21,7 @@ def make_handler(store, port):
     origins = {f"http://{h}" for h in hosts}
 
     class H(BaseHTTPRequestHandler):
-        server_version = "PlaytestDemon/0.3.2"
+        server_version = "PlaytestDemon/0.4.0"
 
         def log_message(self, *a):
             pass
@@ -58,6 +61,16 @@ def make_handler(store, port):
                                               parse_qs(u.query).get('refresh') == ['1']))
                 except ValueError as exc:
                     return self._json({'error': str(exc)}, 400)
+            if u.path == "/app.js":
+                return self._send(200, (UI.parent / "app.js").read_bytes(), "text/javascript; charset=utf-8")
+            m = re.fullmatch(r"/api/run/(RUN-\d+)/log", u.path)
+            if m:
+                log = store.inbox / "AgentRuns" / m.group(1) / "run.log"
+                if not log.is_file():
+                    return self._json({"text": "Waiting to start…"})
+                with log.open("rb") as f:
+                    f.seek(max(0, log.stat().st_size - 16000))
+                    return self._json({"text": f.read().decode("utf-8", "replace")})
             if u.path == "/api/state":
                 return self._json(store.state())
             if u.path.startswith("/media/"):
@@ -120,16 +133,51 @@ def make_handler(store, port):
         def do_POST(self):
             if not self._ok_host() or self.headers.get("Origin", next(iter(origins))) not in origins:
                 return self._send(403, "{}")
+            if urlparse(self.path).path == "/api/import":
+                try:
+                    result = import_recording(store, self.rfile, int(self.headers.get("Content-Length", "0")),
+                                              unquote(self.headers.get("X-Game", "")), unquote(self.headers.get("X-Filename", "")), self.headers.get("X-Platform", "iOS"))
+                    return self._json(result)
+                except (ValueError, OSError, TimeoutError, subprocess.TimeoutExpired) as exc:
+                    return self._json({"error": str(exc)}, 400)
             if not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._send(415, "{}")
             try:
-                n = min(int(self.headers.get("Content-Length", "0")), 1 << 20)
+                n = int(self.headers.get("Content-Length", "0"))
+                if not 0 <= n <= 1 << 20:
+                    return self._json({"error": "Request too large"}, 413)
                 body = json.loads(self.rfile.read(n) or b"{}")
             except Exception:
                 return self._send(400, "{}")
             if not isinstance(body, dict):
                 return self._json({"error": "Expected a JSON object"}, 400)
             p = urlparse(self.path).path
+            if p.startswith('/api/run') or p == '/api/repository':
+                if not getattr(store, 'runner', None):
+                    return self._json({'error': 'Fix runner is not available; restart the desk'}, 409)
+            try:
+                if p in ("/api/repository", "/api/run"):
+                    runner = getattr(store, "runner", None)
+                    if not runner:
+                        raise ValueError("Restart the desk to enable fix runs")
+                    result = runner.configure(str(body.get("game", "")), body) if p == "/api/repository" else runner.submit(str(body.get("game", "")), body.get("ids", []))
+                    return self._json({"ok": True, "result": result})
+                m = re.fullmatch(r"/api/run/(RUN-\d+)/(cancel|refresh|merge|recover|disable_merge)", p)
+                if m:
+                    result = getattr(store.runner, m.group(2))(m.group(1))
+                    return self._json({"ok": True, "result": result})
+                if p == "/api/clip/trash":
+                    store.trash_clip(str(body.get("clip", "")), body.get("restore") is True)
+                    return self._json({"ok": True})
+                m = re.fullmatch(r"/api/ticket/([A-Z0-9]+-\d+)/(duplicate|unlink|verify)", p)
+                if m:
+                    tid, action = m.groups()
+                    if action == "duplicate": result = store.link_duplicate(tid, str(body.get("target", "")))
+                    elif action == "unlink": result = store.unlink_duplicate(tid)
+                    else: result = store.runner.verify(tid, body.get("passed") is True)
+                    return self._json({"ok": True, "ticket": result})
+            except (ValueError, OSError) as exc:
+                return self._json({"error": str(exc)}, 409)
             if p == "/api/games":
                 try:
                     return self._json({'games': games(store.inbox, [body.get('name')])})
@@ -154,7 +202,7 @@ def make_handler(store, port):
                     t = store.later(tid)
                 else:
                     t = store.set_status(tid, {"approve": "approved", "reject": "rejected", "review": "draft"}[act])
-                return self._json({"ok": bool(t)}, 200 if t else 409)
+                return self._json({"ok": bool(t), "error": None if t else "This request cannot change status. Before approval, fill in a title, expected behavior and acceptance criteria."}, 200 if t else 409)
             if p == "/api/handoff":
                 rec = store.handoff(str(body.get("game", "")), [str(i) for i in body.get("ids", [])])
                 return self._json({"ok": bool(rec), "handoff": rec}, 200 if rec else 409)

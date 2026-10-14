@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import desk_analyst  # noqa: E402
+import desk_runs
 import desk_server  # noqa: E402
 from desk_store import Store  # noqa: E402
 
@@ -102,9 +103,16 @@ def main():
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), desk_server.make_handler(store, a.port))
     srv.daemon_threads = True
     child = None if a.no_inbox else start_inbox(inbox)
+    def receiver_health():
+        while not stop_event.wait(3):
+            store.flags["receiverRunning"] = bool(child and child.poll() is None)
+    threading.Thread(target=receiver_health, daemon=True).start()
     threading.Thread(target=store.watch_inbox, args=(stop_event,), daemon=True).start()
     analyst = desk_analyst.Analyst(store, tools, say, notify, stop_event)
     analyst.start()
+    runner = desk_runs.Runs(store, stop_event)
+    runner.start()
+    store.flags["receiverRunning"] = bool(child and child.poll() is None)
     url = f"http://127.0.0.1:{a.port}"
     missing = [n for n, k in (("ffmpeg", "ffmpeg"), ("whisper-cli", "whisper"), ("a whisper model", "whisper_model"),
                               (store.config()["provider"], store.config()["provider"])) if not tools[k]]
@@ -126,6 +134,7 @@ def main():
     finally:
         stop_event.set()
         analyst.cancel_provider()
+        runner.cancel_process()
         srv.server_close()
         if child:
             child.terminate()

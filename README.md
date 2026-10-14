@@ -1,23 +1,26 @@
 # 😈 Playtest Demon
 
-**Catch a bug on Android. Review a ticket on your Mac. Hand it to your coding agent.**
+**Play the game. Describe the change. Approve a request. Let your agent implement it in a PR. Playtest again.**
 
-Playtest Demon keeps a configurable **0–30 second lookback** (10 seconds suggested) before you press Volume Up and keeps recording until you press it again. Your voice goes with the video. The Playtest Demon desktop app receives clips over USB or Wi-Fi, analyses them through **Codex CLI or Claude Code**, and turns findings into editable tickets.
+On Android, Playtest Demon keeps a configurable **0–30 second lookback** (10 seconds suggested) before you press Volume Up and keeps recording until you press it again. Your voice goes with the video. The Playtest Demon desktop app receives clips over USB or Wi-Fi, analyses them through **Codex CLI or Claude Code**, and turns findings into editable tickets.
 
 **Previously called QA Clip / QA Desk / QA Demon.** Updates install over the existing Android app; keep your app data. Existing inboxes, pairing, and the `QA Desk.command` launcher continue to work.
 
-**Android 10+ phones · macOS laptops · Python 3.10+ · local files · bring your own CLI login**
+**Android 10+ recorder · iPhone / iPad recording imports · macOS desk · Python 3.10+ · your own CLI login**
 
 ![The live video queue](docs/images/videos.png)
 
 ## The workflow
 
-1. **Capture.** Start a Playtest Demon session on Android and play your game. Press **Volume Up** when you see something; press again to finish. **Volume Down** discards an active clip.
-2. **Follow the queue.** Videos appear automatically after transfer completes, even while another video is being analysed. The Videos view shows queued, extracting, transcribing, analysing, ready, and failed clips. Search by game, filter by status, pause the queue, or retry a failed clip.
+1. **Capture and speak.** On Android, start a Playtest Demon session on Android and play your game. Press **Volume Up** when you see something; press again to finish. **Volume Down** discards an active clip. On iPhone/iPad, record the screen with Microphone On, AirDrop to your Mac and use **Import recording** ([iOS guide](docs/IOS.md)).
+2. **Follow the queue.** Videos appear automatically after transfer completes, even while another video is being analysed. The Live feed shows queued, extracting, transcribing, analysing, ready, and failed clips. Search by game, filter by status, pause the queue, or retry a failed clip.
 3. **Review one ticket.** Watch the relevant moment, edit the finding, inspect screenshots, then approve, reject, or leave it for later. Edits save automatically. Approval and rejection have Undo.
-4. **Hand off.** Approved tickets collect by game. Copy or drag a prompt into your coding agent. Prompts include reproduction steps, acceptance criteria, and local paths to evidence. Every handoff is saved; copying again does not overwrite earlier handoffs.
+4. **Run a batch.** Approved requests collect by game. Connect an existing local clone of your GitHub game repo, choose the fixing CLI/model/effort and its verification command, then click **Send batch to agent**. Each batch gets a fresh clone, a `playtest/…` branch, approved evidence, verification and a PR. Copy prompt remains available and does not submit or consume the batch.
+5. **Merge and playtest again.** Follow progress and logs in **Fix runs**. Review the PR or opt this game into automatic merge through required GitHub checks. After merge, fixes appear in a playtest checklist. Choose **Verified in game** or **Still needs work** to reopen the request. [Fix-run guide](docs/FIX-RUNS.md) explains setup, limits and recovery.
 
 ![One ticket at a time](docs/images/review.png)
+
+![Approved batches](docs/images/batches.png)
 
 Analysis runs **one video at a time**, in arrival order. Receiving, queue updates, and ticket review continue independently. Closing Playtest Demon stops processing; unfinished work is queued again on the next launch. Pausing lets the current analysis finish and holds subsequent videos.
 
@@ -27,7 +30,7 @@ Give Codex or Claude Code this prompt:
 
 > Install Playtest Demon from https://github.com/guilhermea-infinity/playtest-demon on my Mac and Android phone. Read AGENTS.md and docs/INSTALL-AGENT.md first. Inspect existing tools and preserve my clips and settings. Ask which CLI and model I want to use, install the missing dependencies, download the current prebuilt Android APK (or build it if needed), and install it on my chosen USB-connected phone. Walk me through the Android permissions and verify a short test clip reaches Playtest Demon and becomes a reviewable ticket. Leave me the launch command and explain anything you could not verify.
 
-The detailed [agent installation runbook](docs/INSTALL-AGENT.md) includes prerequisites, exact commands, human permission steps, verification, and recovery. This repository does not support iOS, Windows, or Linux desktop installation yet.
+The detailed [agent installation runbook](docs/INSTALL-AGENT.md) includes prerequisites, exact commands, human permission steps, verification, and recovery. iPhone/iPad imports use Apple’s built-in recorder; no iOS app installation is required. Windows and Linux desktops are not supported.
 
 ## Manual quick start
 
@@ -37,7 +40,7 @@ cd playtest-demon
 bash scripts/setup-mac.sh --brew
 ```
 
-This uses Homebrew for Python, ffmpeg, whisper.cpp, Java 21 and Android platform tools, and creates an isolated `.venv`. Install [Homebrew](https://brew.sh/) first if needed. Without `--brew`, the script installs only the Python dependencies.
+This uses Homebrew for Python, ffmpeg, whisper.cpp, GitHub CLI, Java 21 and Android platform tools, and creates an isolated `.venv`. Install [Homebrew](https://brew.sh/) first if needed. For iOS-only use, run `bash scripts/setup-mac.sh --brew --ios` to skip Android tools. Without `--brew`, the script installs only the Python dependencies.
 
 Install and sign in to **one** provider:
 
@@ -106,6 +109,14 @@ On the phone:
 
 The phone tries the last reachable Mac, Bonjour on Wi-Fi, then USB (`adb reverse`). A new Wi-Fi phone requires approval on the Mac. USB connections are trusted. Clips wait on the phone if the Mac is offline, and only become sent after the Mac acknowledges the complete transfer. The last 20 sent clips remain on the phone.
 
+## Recovery and duplicates
+
+A recording’s trash button moves it and its requests out of the queue. **History & trash → Restore recording** brings them back; files remain on disk. Evidence used by a submitted batch cannot be trashed. Trash does not free disk space; back up and manage the inbox separately.
+
+Review highlights likely repeat requests. **Link duplicate** removes the extra finding from approval while preserving its observation and screenshots. Approved batches include linked evidence. **Separate / restore** reverses the link. Suggestions need human judgment and do not silently discard tickets. Exact repeated imports and Android transfer retries are deduplicated automatically. Redo requires a correction and preserves approved requests; a submitted batch is locked.
+
+The feed distinguishes **Desk online**, **receiver ready**, and the last authenticated **phone contact**. A ready receiver alone does not mean a phone is connected. Estimates use the median of recent completed analyses, appear after three samples, and show a range rather than a promise.
+
 ## Review controls
 
 | Action | Control |
@@ -163,19 +174,24 @@ playtest-demon/
   Tickets/settings.json   provider, model, effort and pause preference
   Tickets/<ID>/           ticket.json and screenshots
   Tickets/.work/          extracted frames, transcript, prompt, provider output
-  Handoffs/               saved prompts
+  Handoffs/               earlier saved prompts
+  Imports/                imported iOS/desktop recordings
+  Tickets/repositories.json game-to-repository and fixing-agent settings
+  Tickets/runs.json       durable batch lifecycle and PR status
+  AgentRuns/<RUN-ID>/     approved snapshot, isolated clone, logs and PR body
+  .receiver.json          last authenticated Android contact (no pairing keys)
 ```
 
 Approved Wi-Fi phone keys are stored in `~/.config/qa-clip/devices.json`. CLI credentials remain in each CLI's own storage. **Do not commit inbox data, pairing keys, credentials, APK signing keys, or machine-specific SDK paths.** The repository's `.gitignore` excludes generated files and local configuration; your inbox needs its own backup.
 
-Videos are transferred locally over plain HTTP; use trusted Wi-Fi or USB. The review server only listens on loopback. **Selected frames, transcript and ticket context are sent to the chosen AI provider through its CLI**, under that provider's terms and account settings. Codex runs in its read-only sandbox; Claude gets only Read and Glob tools. Model output is validated before ticket generation. Copying a handoff marks it as handed off locally; Playtest Demon does not send it to GitHub or any other person. Cloud coding agents cannot access the local evidence paths; share evidence separately if needed.
+Videos are transferred locally over plain HTTP; use trusted Wi-Fi or USB. The review server only listens on loopback. **Selected frames, transcript and ticket context are sent to the chosen AI provider through its CLI**, under that provider's terms and account settings. Codex runs in its read-only sandbox; Claude gets only Read and Glob tools. Model output is validated before ticket generation. Copying a prompt leaves its tickets approved. **Send batch to agent** runs the selected fixing CLI locally and publishes changes to the connected GitHub repository as a PR; it does not create GitHub issues. Evidence is copied into an ignored run workspace for the agent and removed before the commit. Credentials are not copied into the batch. Repo scripts and verification commands run on your Mac: connect a repository you trust. See [fix-run boundaries](docs/FIX-RUNS.md). Earlier handed-off prompts remain in History and can be returned to approval.
 
 ## Current limits
 
-- Android 10 or newer; Android only. Volume-button capture was originally tested on an OPPO A16 / Android 11. Other manufacturers may intercept the buttons differently.
+- The Android recorder requires Android 10 or newer. Volume-button capture was originally tested on an OPPO A16 / Android 11. Other manufacturers may intercept the buttons differently.
 - Android requires screen-sharing consent each session. On Android 15+, locking the phone ends capture.
 - Captures use the session's initial size/orientation, at 720 px wide in portrait. Start the session in the game's orientation; rotation during recording can letterbox the video.
-- Clips cap at three minutes. Audio is from the microphone; game audio is not captured.
+- Android clips cap at three minutes. iOS/imported clips cap at 10 minutes and 750 MB; trim long sessions in Photos first. iOS imports have no rolling lookback or hardware-button trigger. Android Audio is from the microphone; game audio is not captured.
 - Screens are analysed as sampled frames plus a transcript, not as native video input. Brief animation or timing bugs may be missed and should be checked by the reviewer.
 - One analysis at a time. Long clips and local transcription can take several minutes; provider runs time out after 15 minutes.
 - Builds are debug APKs for sideloading, not Play Store releases. Locally built APKs use your machine's debug signing key. A signature mismatch must not be “fixed” by uninstalling without the owner's approval; uninstalling deletes phone-side clips.
