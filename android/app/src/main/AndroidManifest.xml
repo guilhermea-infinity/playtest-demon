@@ -13,7 +13,7 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
-        android:label="QA Demon"
+        android:label="Playtest Demon"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
@@ -39,7 +39,7 @@
         <service
             android:name=".KeyService"
             android:exported="true"
-            android:label="QA Demon volume buttons"
+            android:label="Playtest Demon volume buttons"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

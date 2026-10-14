@@ -248,7 +248,7 @@ public final class CaptureService extends Service {
                 new Intent(this, CaptureService.class).setAction(STOP), PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, "session")
                 .setSmallIcon(R.drawable.ic_note)
-                .setContentTitle(clipping ? "Recording a clip" : "QA Demon session on")
+                .setContentTitle(clipping ? "Recording a clip" : "Playtest Demon session on")
                 .setContentText(clipping ? "Vol + to save · Vol − to throw away" : "Vol + starts a clip with your lookback")
                 .setContentIntent(open)
                 .addAction(new Notification.Action.Builder(null, "Stop session", stop).build())

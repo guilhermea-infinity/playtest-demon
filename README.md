@@ -1,10 +1,10 @@
-# 😈 QA Demon
+# 😈 Playtest Demon
 
 **Catch a bug on Android. Review a ticket on your Mac. Hand it to your coding agent.**
 
-QA Demon keeps a configurable **0–30 second lookback** (10 seconds suggested) before you press Volume Up and keeps recording until you press it again. Your voice goes with the video. The QA Demon desktop app receives clips over USB or Wi-Fi, analyses them through **Codex CLI or Claude Code**, and turns findings into editable tickets.
+Playtest Demon keeps a configurable **0–30 second lookback** (10 seconds suggested) before you press Volume Up and keeps recording until you press it again. Your voice goes with the video. The Playtest Demon desktop app receives clips over USB or Wi-Fi, analyses them through **Codex CLI or Claude Code**, and turns findings into editable tickets.
 
-**Previously called QA Clip / QA Desk.** Updates install over the existing Android app; keep your app data. Existing inboxes, pairing, and the `QA Desk.command` launcher continue to work.
+**Previously called QA Clip / QA Desk / QA Demon.** Updates install over the existing Android app; keep your app data. Existing inboxes, pairing, and the `QA Desk.command` launcher continue to work.
 
 **Android 10+ phones · macOS laptops · Python 3.10+ · local files · bring your own CLI login**
 
@@ -12,28 +12,28 @@ QA Demon keeps a configurable **0–30 second lookback** (10 seconds suggested) 
 
 ## The workflow
 
-1. **Capture.** Start a QA Demon session on Android and play your game. Press **Volume Up** when you see something; press again to finish. **Volume Down** discards an active clip.
+1. **Capture.** Start a Playtest Demon session on Android and play your game. Press **Volume Up** when you see something; press again to finish. **Volume Down** discards an active clip.
 2. **Follow the queue.** Videos appear automatically after transfer completes, even while another video is being analysed. The Videos view shows queued, extracting, transcribing, analysing, ready, and failed clips. Search by game, filter by status, pause the queue, or retry a failed clip.
 3. **Review one ticket.** Watch the relevant moment, edit the finding, inspect screenshots, then approve, reject, or leave it for later. Edits save automatically. Approval and rejection have Undo.
 4. **Hand off.** Approved tickets collect by game. Copy or drag a prompt into your coding agent. Prompts include reproduction steps, acceptance criteria, and local paths to evidence. Every handoff is saved; copying again does not overwrite earlier handoffs.
 
 ![One ticket at a time](docs/images/review.png)
 
-Analysis runs **one video at a time**, in arrival order. Receiving, queue updates, and ticket review continue independently. Closing QA Demon stops processing; unfinished work is queued again on the next launch. Pausing lets the current analysis finish and holds subsequent videos.
+Analysis runs **one video at a time**, in arrival order. Receiving, queue updates, and ticket review continue independently. Closing Playtest Demon stops processing; unfinished work is queued again on the next launch. Pausing lets the current analysis finish and holds subsequent videos.
 
 ## Install with your agent
 
 Give Codex or Claude Code this prompt:
 
-> Install QA Demon from https://github.com/guilhermea-infinity/qa-demon on my Mac and Android phone. Read AGENTS.md and docs/INSTALL-AGENT.md first. Inspect existing tools and preserve my clips and settings. Ask which CLI and model I want to use, install the missing dependencies, download the current prebuilt Android APK (or build it if needed), and install it on my chosen USB-connected phone. Walk me through the Android permissions and verify a short test clip reaches QA Demon and becomes a reviewable ticket. Leave me the launch command and explain anything you could not verify.
+> Install Playtest Demon from https://github.com/guilhermea-infinity/playtest-demon on my Mac and Android phone. Read AGENTS.md and docs/INSTALL-AGENT.md first. Inspect existing tools and preserve my clips and settings. Ask which CLI and model I want to use, install the missing dependencies, download the current prebuilt Android APK (or build it if needed), and install it on my chosen USB-connected phone. Walk me through the Android permissions and verify a short test clip reaches Playtest Demon and becomes a reviewable ticket. Leave me the launch command and explain anything you could not verify.
 
 The detailed [agent installation runbook](docs/INSTALL-AGENT.md) includes prerequisites, exact commands, human permission steps, verification, and recovery. This repository does not support iOS, Windows, or Linux desktop installation yet.
 
 ## Manual quick start
 
 ```bash
-git clone https://github.com/guilhermea-infinity/qa-demon.git
-cd qa-demon
+git clone https://github.com/guilhermea-infinity/playtest-demon.git
+cd playtest-demon
 bash scripts/setup-mac.sh --brew
 ```
 
@@ -56,16 +56,16 @@ The npm commands require Node.js; `brew install node` if absent. See the [Codex 
 Launch your chosen provider:
 
 ```bash
-./QA\ Demon.command --provider codex
+./Playtest\ Demon.command --provider codex
 # or
-./QA\ Demon.command --provider claude --model sonnet
+./Playtest\ Demon.command --provider claude --model sonnet
 ```
 
-The browser opens at **http://127.0.0.1:8800**. After initial setup, double-click **QA Demon.command**. Keep its Terminal window open while testing.
+The browser opens at **http://127.0.0.1:8800**. After initial setup, double-click **Playtest Demon.command**. Keep its Terminal window open while testing.
 
-**Choose a model:** open analyst settings at the top right. QA Demon reads the installed CLI’s model catalog and shows each model’s supported reasoning efforts. Choose **Use CLI configured default** to keep your CLI configuration, or select a listed model and effort. **Refresh models** reloads the catalog (normally cached for five minutes). Models and capabilities vary by CLI version and account; a catalog entry is not a guarantee of quota or access. Discovery does not send a clip or inference prompt. If discovery fails, the page explains why and preserves your saved choice. Settings apply to the next video; the current analysis keeps its original provider, model, and effort. No API key is needed with supported subscription login.
+**Choose a model:** open analyst settings at the top right. Playtest Demon reads the installed CLI’s model catalog and shows each model’s supported reasoning efforts. Choose **Use CLI configured default** to keep your CLI configuration, or select a listed model and effort. **Refresh models** reloads the catalog (normally cached for five minutes). Models and capabilities vary by CLI version and account; a catalog entry is not a guarantee of quota or access. Discovery does not send a clip or inference prompt. If discovery fails, the page explains why and preserves your saved choice. Settings apply to the next video; the current analysis keeps its original provider, model, and effort. No API key is needed with supported subscription login.
 
-**Choose a game:** on Android, tap the game name; use **+ Add game**, type one name, and you’re done. The Mac has the same quick-add flow. Names sync with your paired Mac over USB or Wi-Fi, and phone additions work offline. The phone’s selected game labels new clips; **Detect automatically** uses the foreground app’s name. QA Demon’s game picker filters videos, reviews, and handoffs without stopping the queue or changing the phone’s selection. Existing clips keep their original attribution.
+**Choose a game:** on Android, tap the game name; use **+ Add game**, type one name, and you’re done. The Mac has the same quick-add flow. Names sync with your paired Mac over USB or Wi-Fi, and phone additions work offline. The phone’s selected game labels new clips; **Detect automatically** uses the foreground app’s name. Playtest Demon’s game picker filters videos, reviews, and handoffs without stopping the queue or changing the phone’s selection. Existing clips keep their original attribution.
 
 **Catch bugs after they happen:** the phone’s **Lookback** slider keeps 0–30 seconds before the first Volume Up press. **10 seconds is suggested** because it gives you time to notice a bug and react, without adding too much footage. This can capture a one-off bug you cannot reproduce. Set 0 to start recording only when you press; longer windows use more memory. Lookback starts buffering only after screen-sharing consent and stops with the session. Change it before starting a session. The actual lead-in may be shorter just after starting, or slightly longer to begin on a playable video keyframe.
 
@@ -84,7 +84,7 @@ This downloads roughly 466 MB. Alternatively set `QA_WHISPER_MODEL=/absolute/pat
 
 ### Install on Android
 
-For a prebuilt APK, download it from [Releases](https://github.com/guilhermea-infinity/qa-demon/releases), verify the published SHA-256, and put it in `out/`. Or build locally:
+For a prebuilt APK, download it from [Releases](https://github.com/guilhermea-infinity/playtest-demon/releases), verify the published SHA-256, and put it in `out/`. Or build locally:
 
 1. Install Android Studio, then SDK Platform **36** and Build Tools **35.0.0** in SDK Manager. Java 21 was installed by the setup script.
 2. Set `ANDROID_HOME` if the SDK is not at `~/Library/Android/sdk`.
@@ -98,7 +98,7 @@ For a prebuilt APK, download it from [Releases](https://github.com/guilhermea-in
 
 On the phone:
 
-- Enable **QA Demon volume buttons** in Accessibility settings. If blocked for a sideloaded app, use Settings → Apps → QA Demon → ⋮ → **Allow restricted settings**, then return to Accessibility.
+- Enable **Playtest Demon volume buttons** in Accessibility settings. If blocked for a sideloaded app, use Settings → Apps → Playtest Demon → ⋮ → **Allow restricted settings**, then return to Accessibility.
 - Allow microphone access and notifications when requested.
 - Choose a game and your lookback window (10 seconds suggested).
 - Tap **Start session** and approve Android's screen-sharing prompt. Choose the whole screen when Android offers a choice.
@@ -146,7 +146,7 @@ A failed analysis shows its error and a Retry button. If sign-in expires, clips 
 Code and data live separately:
 
 ```text
-qa-demon/
+playtest-demon/
   android/                Java Android recorder (no third-party app libraries)
   mac/                    receiver, queue, analyst, server, UI
   mac/prompts/            ticket and handoff instructions
@@ -168,7 +168,7 @@ qa-demon/
 
 Approved Wi-Fi phone keys are stored in `~/.config/qa-clip/devices.json`. CLI credentials remain in each CLI's own storage. **Do not commit inbox data, pairing keys, credentials, APK signing keys, or machine-specific SDK paths.** The repository's `.gitignore` excludes generated files and local configuration; your inbox needs its own backup.
 
-Videos are transferred locally over plain HTTP; use trusted Wi-Fi or USB. The review server only listens on loopback. **Selected frames, transcript and ticket context are sent to the chosen AI provider through its CLI**, under that provider's terms and account settings. Codex runs in its read-only sandbox; Claude gets only Read and Glob tools. Model output is validated before ticket generation. Copying a handoff marks it as handed off locally; QA Demon does not send it to GitHub or any other person. Cloud coding agents cannot access the local evidence paths; share evidence separately if needed.
+Videos are transferred locally over plain HTTP; use trusted Wi-Fi or USB. The review server only listens on loopback. **Selected frames, transcript and ticket context are sent to the chosen AI provider through its CLI**, under that provider's terms and account settings. Codex runs in its read-only sandbox; Claude gets only Read and Glob tools. Model output is validated before ticket generation. Copying a handoff marks it as handed off locally; Playtest Demon does not send it to GitHub or any other person. Cloud coding agents cannot access the local evidence paths; share evidence separately if needed.
 
 ## Current limits
 
@@ -182,7 +182,7 @@ Videos are transferred locally over plain HTTP; use trusted Wi-Fi or USB. The re
 
 ## Development
 
-For a synthetic UI demo without provider usage, run `.venv/bin/python scripts/demo.py --inbox /tmp/qa-clip-demo`, then `./QA\ Demon.command --inbox /tmp/qa-clip-demo --no-inbox --paused --port 8812`. Use a fresh directory; the demo never overwrites an existing inbox.
+For a synthetic UI demo without provider usage, run `.venv/bin/python scripts/demo.py --inbox /tmp/qa-clip-demo`, then `./Playtest\ Demon.command --inbox /tmp/qa-clip-demo --no-inbox --paused --port 8812`. Use a fresh directory; the demo never overwrites an existing inbox.
 
 Read [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md). CI runs the Python regression tests, validates frontend JavaScript syntax and builds the Android APK. The [architecture guide](docs/ARCHITECTURE.md) explains the transfer protocol and lifecycle.
 

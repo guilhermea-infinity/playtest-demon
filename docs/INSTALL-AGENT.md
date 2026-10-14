@@ -1,4 +1,4 @@
-# Install QA Demon for your owner
+# Install Playtest Demon for your owner
 
 You are installing an Android capture app and its macOS review desk. Complete the checks you can perform, guide the owner through Android permission prompts, and report what you actually verified. Do not claim an end-to-end phone test unless a real clip arrived and produced a ticket.
 
@@ -7,7 +7,7 @@ You are installing an Android capture app and its macOS review desk. Complete th
 - Confirm this is macOS and the phone is Android 10+. Other laptop operating systems and iOS are not supported.
 - Inspect `python3`, `brew`, `node`, `ffmpeg`, `ffprobe`, `whisper-cli`, `claude`, `codex`, Java, `adb`, and the Android SDK. Reuse working installations.
 - Ask the owner to choose **Codex CLI or Claude Code**, a model or CLI default, the installation directory, and the inbox location if their preferences are not already known. Do not switch providers because one lacks credentials.
-- Check for an existing QA Demon (formerly QA Clip) installation and `~/Desktop/QA-Inbox`. Preserve data, settings and pairing keys. Back up the existing inbox before migration. Never put it inside the Git repository.
+- Check for an existing Playtest Demon (formerly QA Clip / QA Demon) installation and `~/Desktop/QA-Inbox`. Preserve data, settings and pairing keys. Back up the existing inbox before migration. Never put it inside the Git repository.
 - Inspect `adb devices`. If several devices are connected, select the owner's intended serial explicitly. An `unauthorized` device needs the owner's approval on the phone.
 
 ## 2. Install the laptop tools
@@ -40,7 +40,7 @@ curl -fL --retry 3 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggm
   -o "$HOME/.cache/whisper/ggml-small.bin"
 ```
 
-An alternate model path can be supplied with `QA_WHISPER_MODEL`. This environment variable must be present when starting QA Demon; a Terminal-only export is not inherited by a later Finder launch. The default cache location works for both.
+An alternate model path can be supplied with `QA_WHISPER_MODEL`. This environment variable must be present when starting Playtest Demon; a Terminal-only export is not inherited by a later Finder launch. The default cache location works for both.
 
 Run `.venv/bin/python scripts/doctor.py --provider codex` (or `claude`). Resolve required missing tools; explicitly report if voice transcription is unavailable.
 
@@ -68,8 +68,8 @@ If Android reports `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the installed app uses 
 These are owner actions, not permissions an agent should silently grant:
 
 1. Enable Developer options and USB debugging; approve the Mac's debugging fingerprint.
-2. In QA Demon, enable “QA Demon volume buttons” in Accessibility settings.
-3. If Android blocks Accessibility for a sideloaded app, open Settings → Apps → QA Demon → ⋮ → Allow restricted settings, then retry.
+2. In Playtest Demon, enable “Playtest Demon volume buttons” in Accessibility settings.
+3. If Android blocks Accessibility for a sideloaded app, open Settings → Apps → Playtest Demon → ⋮ → Allow restricted settings, then retry.
 4. Grant microphone and notification permissions when prompted.
 5. Tap Start session and approve screen capture. Choose the whole screen when offered so the game is included.
 
@@ -78,8 +78,8 @@ Do not disable platform protections or change unrelated accessibility services.
 ## 5. Start and verify the full loop
 
 ```bash
-./QA\ Demon.command --provider codex
-# OR: ./QA\ Demon.command --provider claude --model sonnet
+./Playtest\ Demon.command --provider codex
+# OR: ./Playtest\ Demon.command --provider claude --model sonnet
 ```
 
 Use `--inbox /absolute/path` for a custom inbox. Open http://127.0.0.1:8800. If the port is occupied, identify the existing process before changing it. Only one desk may manage a given inbox.
@@ -97,7 +97,7 @@ Use `--inbox /absolute/path` for a custom inbox. Open http://127.0.0.1:8800. If 
 
 ## 6. Leave a clear handover
 
-Give the owner the repository path, inbox path, chosen CLI/model, exact launch command and any unverified items. Double-clicking QA Demon.command works after setup and remembers provider/model settings. Keep Terminal open; Ctrl+C stops the desk. The browser's Pause queue control is persistent and does not stop the receiver.
+Give the owner the repository path, inbox path, chosen CLI/model, exact launch command and any unverified items. Double-clicking Playtest Demon.command works after setup and remembers provider/model settings. Keep Terminal open; Ctrl+C stops the desk. The browser's Pause queue control is persistent and does not stop the receiver.
 
 ## Troubleshooting
 
@@ -108,9 +108,9 @@ Give the owner the repository path, inbox path, chosen CLI/model, exact launch c
 | No spoken quote | Check mic permission, `whisper-cli`, its model, and `QA_WHISPER_MODEL`. |
 | No USB arrival | `adb devices`, cable/authorization, receiver port 8799, `adb -s SERIAL reverse tcp:8799 tcp:8799`. |
 | No Wi-Fi arrival | Same trusted network, Mac firewall approval, pairing dialog, Bonjour allowed. Try USB. |
-| Clip waits on phone | Keep QA Demon running and the Mac awake. The phone retries automatically. |
+| Clip waits on phone | Keep Playtest Demon running and the Mac awake. The phone retries automatically. |
 | Empty review | Videos may still be processing or the queue may be paused. Review has only unapproved drafts. |
-| Interrupted analysis | Restart QA Demon; working clips become queued. Check `.work/` logs if it repeatedly fails. |
-| Python import error | Rerun `bash scripts/setup-mac.sh` and launch through QA Demon.command, which uses `.venv`. |
+| Interrupted analysis | Restart Playtest Demon; working clips become queued. Check `.work/` logs if it repeatedly fails. |
+| Python import error | Rerun `bash scripts/setup-mac.sh` and launch through Playtest Demon.command, which uses `.venv`. |
 
 Data lives outside Git. Back up the inbox separately. Delete neither the inbox nor `~/.config/qa-clip/devices.json` as a troubleshooting shortcut.

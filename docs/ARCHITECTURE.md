@@ -1,4 +1,4 @@
-# How QA Demon works
+# How Playtest Demon works
 
 ## Capture and transfer
 

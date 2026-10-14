@@ -18,7 +18,7 @@ def make_handler(store, port):
     origins = {f"http://{h}" for h in hosts}
 
     class H(BaseHTTPRequestHandler):
-        server_version = "QADemon/0.3.1"
+        server_version = "PlaytestDemon/0.3.2"
 
         def log_message(self, *a):
             pass

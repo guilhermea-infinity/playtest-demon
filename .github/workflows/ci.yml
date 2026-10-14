@@ -28,5 +28,5 @@ jobs:
       - run: ./build.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: QADemon-debug-apk
+          name: PlaytestDemon-debug-apk
           path: out/*.apk

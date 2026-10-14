@@ -61,7 +61,7 @@ public final class KeyService extends AccessibilityService {
         return handle(e.getKeyCode(), e.getAction(), e.getRepeatCount());
     }
 
-    /** True = QA Demon used the key (the volume does not change). Also driven by the debug build's adb trigger. */
+    /** True = Playtest Demon used the key (the volume does not change). Also driven by the debug build's adb trigger. */
     boolean handle(int k, int action, int repeat) {
         if (k != KeyEvent.KEYCODE_VOLUME_UP && k != KeyEvent.KEYCODE_VOLUME_DOWN) return false;
         Log.d(Recorder.TAG, "key " + KeyEvent.keyCodeToString(k) + " action=" + action + " session=" + (CaptureService.I != null));

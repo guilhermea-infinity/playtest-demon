@@ -50,7 +50,7 @@ def discover(provider):
             p.stdin.write(json.dumps(obj) + '\n')
             p.stdin.flush()
         try:
-            send({'id': 1, 'method': 'initialize', 'params': {'clientInfo': {'name': 'qa-demon', 'version': '0.3.1'}}}
+            send({'id': 1, 'method': 'initialize', 'params': {'clientInfo': {'name': 'playtest-demon', 'version': '0.3.2'}}}
                  if provider == 'codex' else {'type': 'control_request', 'request_id': 'models', 'request': {'subtype': 'initialize'}})
             deadline, models = time.monotonic() + 25, []
             while time.monotonic() < deadline:

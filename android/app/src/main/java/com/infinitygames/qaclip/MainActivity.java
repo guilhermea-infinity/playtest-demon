@@ -74,7 +74,7 @@ public final class MainActivity extends Activity {
         ImageView devil = new ImageView(this);
         devil.setImageResource(R.drawable.ic_devil);
         identity.addView(devil, new LinearLayout.LayoutParams(px(40), px(40)));
-        TextView title = text("QA Demon", 30, TXT, true);
+        TextView title = text("Playtest Demon", 26, TXT, true);
         title.setPadding(px(12), 0, 0, 0);
         identity.addView(title);
         col.addView(identity);
@@ -93,7 +93,7 @@ public final class MainActivity extends Activity {
         add.setPadding(0, px(8), 0, px(8));
         add.setOnClickListener(v -> addGame());
         gameCard.addView(add);
-        gameCard.addView(text("Shared with QA Demon when your Mac is connected.", 12, DIM, false));
+        gameCard.addView(text("Shared with Playtest Demon when your Mac is connected.", 12, DIM, false));
 
         go = new Button(this);
         go.setAllCaps(false);
@@ -155,7 +155,7 @@ public final class MainActivity extends Activity {
         lookbackHint.setPadding(0, px(10), 0, 0);
         capture.addView(lookbackHint);
 
-        TextView hint = text("HOW IT WORKS\n\nVolume Up   Start a clip, including lookback\nVolume Up   Press again to save & send\nVolume Down   Discard the current clip\n\nQA Demon  /  Android → Mac → your agent", 13, DIM, false);
+        TextView hint = text("HOW IT WORKS\n\nVolume Up   Start a clip, including lookback\nVolume Up   Press again to save & send\nVolume Down   Discard the current clip\n\nPlaytest Demon  /  Android → Mac → your agent", 13, DIM, false);
         hint.setLineSpacing(px(6), 1f);
         hint.setPadding(0, px(8), 0, 0);
         col.addView(hint);
@@ -236,7 +236,7 @@ public final class MainActivity extends Activity {
         input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(80)});
         LinearLayout content = new LinearLayout(this);
         content.setPadding(px(24), px(12), px(24), 0); content.addView(input, new LinearLayout.LayoutParams(-1, -2));
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Add a game").setMessage("Just a name. We’ll share it with QA Demon.")
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Add a game").setMessage("Just a name. We’ll share it with Playtest Demon.")
             .setView(content).setNegativeButton("Cancel", null).setPositiveButton("Add & select", null).create();
         dialog.setOnShowListener(d -> {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
@@ -267,7 +267,7 @@ public final class MainActivity extends Activity {
             return;
         }
         if (!KeyService.on()) {
-            Toast.makeText(this, "Turn on “QA Demon volume buttons”, then come back", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Turn on “Playtest Demon volume buttons”, then come back", Toast.LENGTH_LONG).show();
             openKeys();
             return;
         }

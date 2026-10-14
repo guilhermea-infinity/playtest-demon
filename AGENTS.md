@@ -1,6 +1,6 @@
-# QA Demon agent instructions
+# Playtest Demon agent instructions
 
-QA Demon is an Android-only screen recorder plus a macOS receiver and QA review desk.
+Playtest Demon is an Android-only screen recorder plus a macOS receiver and QA review desk.
 
 ## If asked to install
 

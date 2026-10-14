@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [[ "$(uname -s)" != Darwin ]]; then
-  echo 'QA Demon currently supports macOS laptops and Android phones.' >&2; exit 1
+  echo 'Playtest Demon currently supports macOS laptops and Android phones.' >&2; exit 1
 fi
 if [[ "${1:-}" == --brew ]]; then
   command -v brew >/dev/null || { echo 'Install Homebrew from https://brew.sh first.' >&2; exit 1; }
