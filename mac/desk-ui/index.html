@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA Desk</title>
+<style>
+:root {
+  --bg: #0e0e10; --panel: #17171a; --raise: #1f1f23; --line: #2c2c2e; --text: #f5f5f7; --dim: #8e8e93;
+  --red: #ff3b30; --green: #30b05a; --green-hi: #34c759; --orange: #ff9f0a; --blue: #0a84ff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+textarea, input { font: inherit; color: var(--text); }
+kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1px 5px; border-radius: 4px;
+  background: rgba(255,255,255,.12); margin-left: 6px; opacity: .8; }
+code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(255,255,255,.08);
+  padding: 2px 6px; border-radius: 5px; }
+
+header { height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 22px; border-bottom: 1px solid var(--line); }
+header h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; }
+.status { display: flex; align-items: center; gap: 8px; color: var(--dim); }
+.spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--orange); border-right-color: transparent;
+  animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-hi); }
+.grow { flex: 1; }
+.banner { margin: 12px 22px 0; padding: 12px 16px; border-radius: 12px; background: rgba(255,159,10,.12);
+  border: 1px solid rgba(255,159,10,.35); color: #ffd28a; display: flex; gap: 12px; align-items: center; }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: minmax(0, 1fr); height: calc(100vh - 56px); }
+main.has-banner { height: calc(100vh - 56px - 60px); }
+#review { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 16px 22px 0; }
+#side { border-left: 1px solid var(--line); overflow: auto; padding: 16px 18px 40px; }
+
+.tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs .count { color: var(--dim); margin-right: 8px; }
+.tab { padding: 3px 10px; border-radius: 99px; background: var(--raise); color: var(--dim); font-size: 12px; font-weight: 600; }
+.tab.on { background: var(--text); color: var(--bg); }
+
+.card { flex: 1; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 22px; }
+.vcol { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+video { height: calc(100vh - 56px - 120px); max-width: 42vw; aspect-ratio: 9 / 20; object-fit: contain; background: #000; border-radius: 18px; display: block; }
+.has-banner video { height: calc(100vh - 56px - 180px); }
+.jumps { display: flex; gap: 8px; }
+.jump { padding: 6px 10px; border-radius: 9px; background: var(--raise); font-size: 12px; color: var(--dim); }
+.jump:hover { color: var(--text); }
+
+.form { min-height: 0; overflow: auto; padding-right: 6px; display: flex; flex-direction: column; }
+.meta { color: var(--dim); font-size: 12px; margin-bottom: 6px; }
+.meta b { color: var(--text); }
+.conf-low { color: var(--orange); font-weight: 600; }
+.title { width: 100%; font-size: 22px; font-weight: 700; letter-spacing: -.01em; padding: 6px 0 8px; border: 0;
+  border-bottom: 1px solid transparent; background: none; outline: none; }
+.title:focus { border-bottom-color: var(--line); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 4px 0 14px; }
+.chips .lab { color: var(--dim); font-size: 12px; margin: 0 4px 0 10px; }
+.chips .lab:first-child { margin-left: 0; }
+.chip { padding: 4px 11px; border-radius: 99px; background: var(--raise); color: var(--dim); font-size: 12px; }
+.chip.on { background: #3a3a3f; color: var(--text); box-shadow: inset 0 0 0 1px #5a5a60; }
+.chip.on.high { background: rgba(255,59,48,.2); box-shadow: inset 0 0 0 1px rgba(255,59,48,.6); }
+.checks { background: rgba(255,159,10,.1); border: 1px solid rgba(255,159,10,.3); border-radius: 12px;
+  padding: 10px 14px; margin-bottom: 14px; color: #ffd28a; }
+.checks b { display: block; margin-bottom: 2px; color: var(--orange); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.checks ul { margin: 0; padding-left: 18px; }
+.field { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+.field > label { color: var(--dim); padding-top: 7px; font-size: 13px; }
+.field textarea { width: 100%; resize: none; border: 0; background: none; padding: 7px 8px; border-radius: 8px;
+  outline: none; line-height: 1.45; min-height: 34px; overflow: hidden; }
+.field textarea:hover { background: rgba(255,255,255,.03); }
+.field textarea:focus { background: var(--raise); }
+.field textarea::placeholder { color: #55555a; }
+.quote textarea { font-style: italic; }
+.mini { font-size: 12px; color: var(--blue); margin-left: 4px; }
+.shots { display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 0; }
+.shot { width: 132px; }
+.shot .img { position: relative; border-radius: 10px; overflow: hidden; background: #000; cursor: zoom-in;
+  box-shadow: 0 0 0 2px var(--blue); }
+.shot.off .img { box-shadow: none; opacity: .35; }
+.shot img { width: 100%; display: block; }
+.shot .cap { font-size: 12px; color: var(--dim); margin-top: 5px; line-height: 1.3; }
+.shot .row { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; }
+.shot .row button { color: var(--blue); padding: 0; }
+.redo { color: var(--dim); font-size: 12px; padding: 14px 0 4px; }
+.redo button { color: var(--blue); padding: 0; }
+.redo-box { display: flex; gap: 8px; margin-top: 8px; }
+.redo-box input { flex: 1; background: var(--raise); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; outline: none; }
+
+.actions { position: sticky; bottom: 0; display: flex; gap: 10px; padding: 14px 0 18px; margin-top: auto;
+  background: linear-gradient(to bottom, rgba(14,14,16,0), var(--bg) 30%); }
+.btn { padding: 12px 18px; border-radius: 12px; background: var(--raise); font-weight: 600; }
+.btn:hover { background: #2a2a2f; }
+.btn.reject { color: #ff8a80; }
+.btn.go { flex: 1; background: var(--green); color: #fff; font-size: 16px; }
+.btn.go:hover { background: #36c063; }
+.btn.blue { background: var(--blue); color: #fff; }
+.btn.blue:hover { background: #2b95ff; }
+
+.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--dim); gap: 8px; padding-bottom: 80px; }
+.empty h2 { color: var(--text); font-size: 24px; margin: 0; }
+
+#side h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 6px 0 10px; font-weight: 600; }
+#side section + section { margin-top: 26px; }
+.tray { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.tray .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.tray .head b { font-size: 15px; }
+.tray .head span { color: var(--dim); font-size: 12px; }
+.trow { display: flex; gap: 8px; align-items: baseline; padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.trow .id { color: var(--dim); font-size: 12px; font-weight: 600; flex: none; }
+.trow .t { flex: 1; min-width: 0; }
+.trow button { color: var(--dim); font-size: 12px; padding: 0 2px; flex: none; }
+.trow button:hover { color: var(--text); }
+.tray .go { display: flex; gap: 8px; margin-top: 12px; }
+.tray .go .btn { flex: 1; padding: 11px 14px; }
+.drag { padding: 11px 14px; border-radius: 12px; border: 1px dashed #55555a; color: var(--dim); cursor: grab;
+  user-select: none; -webkit-user-select: none; font-weight: 600; white-space: nowrap; }
+.drag:active { cursor: grabbing; }
+.drag:hover { color: var(--text); border-color: var(--dim); }
+.tray details { margin-top: 10px; }
+.tray summary { color: var(--dim); font-size: 12px; cursor: pointer; }
+.tray pre { white-space: pre-wrap; font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #c7c7cc;
+  background: var(--bg); border-radius: 10px; padding: 10px; max-height: 340px; overflow: auto; margin: 8px 0 0; }
+.hint { color: var(--dim); font-size: 13px; }
+.srow { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.srow .t { flex: 1; min-width: 0; }
+.srow .t small { display: block; color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow button { color: var(--blue); font-size: 12px; padding: 0; }
+.srow button.quiet { color: var(--dim); }
+.fail { color: #ff8a80; }
+details.rej summary { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; cursor: pointer; font-weight: 600; }
+
+#toast { position: fixed; right: 20px; bottom: 20px; width: 340px; transform: translateY(20px); opacity: 0;
+  background: #2c2c30; border: 1px solid #3a3a3f; padding: 12px 16px; border-radius: 14px; display: flex; gap: 14px;
+  align-items: center; justify-content: space-between; box-shadow: 0 10px 30px rgba(0,0,0,.4); transition: .2s; pointer-events: none; }
+#toast.on { opacity: 1; transform: none; pointer-events: auto; }
+#toast button { color: var(--blue); font-weight: 600; }
+#lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; cursor: zoom-out; z-index: 9; }
+#lightbox.on { display: flex; }
+#lightbox img { max-height: 94vh; max-width: 94vw; border-radius: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>QA Desk</h1>
+  <div class="status" id="status"></div>
+  <div class="grow"></div>
+  <div class="status" id="counts"></div>
+</header>
+<div id="banner"></div>
+<main id="main">
+  <div id="review"></div>
+  <aside id="side"></aside>
+</main>
+<div id="toast"></div>
+<div id="lightbox" onclick="this.classList.remove('on')"><img alt=""></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const media = rel => '/media/' + rel.split('/').map(encodeURIComponent).join('/');
+const mmss = t => { t = Math.max(0, Math.round(+t || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+const clipName = rel => (rel || '').split('/').pop().replace(/\.mp4$/, '');
+const KINDS = ['bug', 'change', 'polish', 'crash', 'idea'], PRIOS = ['high', 'normal', 'low'];
+
+let S = null, lastJSON = '', cur = null, dirty = {}, saveTimer = null, dragging = false;
+
+async function api(path, body) {
+  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+  return r.json().catch(() => ({}));
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/api/state', {cache: 'no-store'});
+    const txt = await r.text();
+    if (txt !== lastJSON && !dragging) { lastJSON = txt; S = JSON.parse(txt); render(); }
+    else if (S && S.working) renderStatus();
+  } catch (e) { $('#status').innerHTML = '<span class="fail">QA Desk isn\'t running. Start it with QA Desk.command.</span>'; }
+}
+setInterval(poll, 1500);
+poll();
+
+// ---------- top bar ----------
+
+function renderStatus() {
+  const w = S.working;
+  let h;
+  if (w) {
+    const secs = Math.round(Date.now() / 1000 - (w.startedAt || Date.now() / 1000));
+    const game = (w.meta && w.meta.app) || '';
+    h = `<span class="spin"></span><span>${esc(w.step || 'Working')} · ${esc(game)} ${esc(clipName(w.clip).slice(11))} · ${mmss(secs)}</span>`;
+    if (S.queued) h += `<span>· ${S.queued} more waiting</span>`;
+  } else if (S.queued && S.flags.auth === 'signed-out') {
+    h = `<span class="fail">${S.queued} clip${S.queued > 1 ? 's' : ''} waiting for Claude to sign in</span>`;
+  } else if (S.queued) {
+    h = `<span class="spin"></span><span>${S.queued} clip${S.queued > 1 ? 's' : ''} waiting</span>`;
+  } else {
+    h = `<span class="dot"></span><span>Waiting for clips from the phone</span>`;
+  }
+  $('#status').innerHTML = h;
+}
+
+function render() {
+  renderStatus();
+  const nd = S.drafts.length, na = S.trays.reduce((n, t) => n + t.ids.length, 0);
+  $('#counts').innerHTML = `<span>${nd} to review</span><span>·</span><span>${na} ready to hand off</span>`;
+  document.title = (nd ? `(${nd}) ` : '') + 'QA Desk';
+
+  const auth = S.flags.auth;
+  $('#banner').innerHTML = auth === 'signed-out' || auth === 'missing' ? `<div class="banner">
+      <span>${auth === 'missing' ? 'Claude Code isn\'t installed on this Mac.' : 'Claude Code isn\'t signed in on this Mac, so new clips are waiting.'}
+      Open Terminal and run <code>claude auth login</code>. Clips start by themselves once you're signed in.</span>
+      <button class="mini" onclick="copyText('claude auth login').then(ok => ok && toast('Copied. Paste it in Terminal.'))">Copy</button></div>` : '';
+  $('#main').classList.toggle('has-banner', !!$('#banner').innerHTML);
+
+  renderReview();
+  renderSide();
+}
+
+// ---------- the review card ----------
+
+function renderReview() {
+  const box = $('#review');
+  if (!S.drafts.length) {
+    cur = null;
+    const busy = S.working || S.queued;
+    box.innerHTML = `<div class="empty"><h2>${busy ? 'Drafting tickets…' : 'Nothing to review'}</h2>
+      <div>${busy ? 'Claude is watching your clip. The tickets show up here.' : 'Press Vol + on the phone when you see something. Every clip is drafted here by itself.'}</div></div>`;
+    return;
+  }
+  if (!S.drafts.find(t => t.id === cur)) { cur = S.drafts[0].id; buildCard(); }
+  else if (!$('.card', box)) buildCard();
+  else renderTabs();
+}
+
+function renderTabs() {
+  const el = $('#tabs');
+  if (!el) return;
+  const i = S.drafts.findIndex(t => t.id === cur);
+  el.innerHTML = `<span class="count">${i + 1} of ${S.drafts.length} to review</span>` +
+    S.drafts.map(t => `<button class="tab ${t.id === cur ? 'on' : ''}" onclick="openTicket('${t.id}')" title="${esc(t.title)}">${esc(t.id)}</button>`).join('');
+}
+
+function openTicket(id) { flush(); cur = id; buildCard(); }
+
+function buildCard() {
+  const t = S.drafts.find(x => x.id === cur);
+  dirty = {};
+  const m = t.moment || {}, q = t.quote;
+  const low = t.confidence === 'low';
+  const area = (k, label, ph, val) => `<div class="field"><label>${label}</label>
+    <textarea data-k="${k}" rows="1" placeholder="${ph}">${esc(val ?? t[k])}</textarea></div>`;
+  $('#review').innerHTML = `
+    <div class="tabs" id="tabs"></div>
+    <div class="card">
+      <div class="vcol">
+        <video id="vid" src="${media(t.clip)}" controls playsinline preload="auto" style="${t.frame ? `aspect-ratio:${t.frame[0]} / ${t.frame[1]}` : ''}"></video>
+        <div class="jumps">
+          <button class="jump" onclick="seek(${(m.from || 0) - 1.5})">▶ The moment ${mmss(m.from)}</button>
+          ${t.pressedAtSecond != null ? `<button class="jump" onclick="seek(${t.pressedAtSecond - 0.5})">You pressed ${mmss(t.pressedAtSecond)}</button>` : ''}
+          <button class="jump" onclick="seek(0)">From the start</button>
+        </div>
+      </div>
+      <div class="form">
+        <div class="meta"><b>${esc(t.id)}</b> · ${esc(t.game)} ${esc(t.version || '')} · clip ${esc(clipName(t.clip))}
+          · <span class="${low ? 'conf-low' : ''}">${esc(t.confidence || '')} confidence</span></div>
+        <input class="title" data-k="title" value="${esc(t.title)}" placeholder="What's wrong, or what to change">
+        <div class="chips">
+          <span class="lab">Kind</span>${KINDS.map(k => `<button class="chip ${t.kind === k ? 'on' : ''}" data-set="kind" data-v="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}
+          <span class="lab">Priority</span>${PRIOS.map(k => `<button class="chip ${t.priority === k ? 'on' : ''} ${k}" data-set="priority" data-v="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}
+        </div>
+        ${t.checks && t.checks.length ? `<div class="checks"><b>Check before approving</b><ul>${t.checks.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
+        ${area('where', 'Where', 'Screen and position')}
+        ${area('now', 'Now', 'What the game does now')}
+        ${area('want', 'Want', 'What it should do instead')}
+        ${area('steps', 'Steps', 'Steps to reproduce, one per line (bugs only)', (t.steps || []).join('\n'))}
+        ${area('done_when', 'Done when', 'One thing the programmer can check')}
+        <div class="field quote"><label>You said ${q ? `<button class="mini" onclick="seek(${q.t - 0.5})">▶ ${mmss(q.t)}</button>` : ''}</label>
+          <textarea data-k="quote" rows="1" placeholder="${q ? '' : 'No words matched to this ticket'}" ${q ? '' : 'disabled'}>${esc(q ? q.text : '')}</textarea></div>
+        <div class="field"><label>Shots</label><div class="shots">${(t.shots || []).map(s => `
+          <div class="shot ${s.use === false ? 'off' : ''}" data-file="${esc(s.file)}">
+            <div class="img" data-file="${esc(s.file)}" onclick="zoom(this.dataset.file)"><img src="${media(s.file)}" alt=""></div>
+            <div class="row"><button onclick="seek(${s.t - 0.5})">▶ ${mmss(s.t)}</button><button onclick="toggleShot(this)">${s.use === false ? 'Use' : 'Drop'}</button></div>
+            <div class="cap">${esc(s.caption)}</div></div>`).join('') || '<span class="hint" style="padding-top:7px">No screenshots</span>'}</div></div>
+        ${area('note', 'Note', 'Anything else for the programmer (optional)')}
+        <div class="redo">Claude got it wrong? <button onclick="redoOpen()">Redo this clip with a hint</button>
+          <div class="redo-box" id="redo" hidden><input id="redoHint" placeholder="e.g. I meant the buttons on the right edge, not the bottom bar" onkeydown="if (event.key === 'Enter') redo()">
+          <button class="btn" onclick="redo()">Redo</button></div></div>
+        <div class="actions">
+          <button class="btn reject" onclick="act('reject')">Reject<kbd>R</kbd></button>
+          <button class="btn" onclick="act('later')">Later<kbd>L</kbd></button>
+          <button class="btn go" onclick="act('approve')">Approve<kbd>A</kbd></button>
+        </div>
+      </div>
+    </div>`;
+  renderTabs();
+  sizeAll(); requestAnimationFrame(sizeAll);
+  document.querySelectorAll('.form [data-k]').forEach(el => el.addEventListener('input', () => {
+    if (el.tagName === 'TEXTAREA') autosize(el);
+    const k = el.dataset.k;
+    dirty[k] = k === 'steps' ? el.value.split('\n') : el.value;
+    clearTimeout(saveTimer); saveTimer = setTimeout(flush, 600);
+  }));
+  document.querySelectorAll('.chip[data-set]').forEach(el => el.addEventListener('click', () => {
+    document.querySelectorAll(`.chip[data-set="${el.dataset.set}"]`).forEach(c => c.classList.toggle('on', c === el));
+    dirty[el.dataset.set] = el.dataset.v; flush();
+  }));
+  const v = $('#vid');
+  v.addEventListener('loadedmetadata', () => {
+    sizeAll();
+    v.currentTime = Math.max(0, (m.from || 0) - 1.5);
+    v.muted = false;
+    v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+  }, {once: true});
+}
+
+function autosize(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+function sizeAll() { document.querySelectorAll('.form textarea').forEach(autosize); }
+window.addEventListener('resize', sizeAll);
+function seek(t) { const v = $('#vid'); if (!v) return; v.currentTime = Math.max(0, t); v.play().catch(() => {}); }
+function zoom(file) { $('#lightbox img').src = media(file); $('#lightbox').classList.add('on'); }
+
+function toggleShot(btn) {
+  const sh = btn.closest('.shot');
+  sh.classList.toggle('off');
+  btn.textContent = sh.classList.contains('off') ? 'Use' : 'Drop';
+  dirty.useShots = [...document.querySelectorAll('.shot:not(.off)')].map(s => s.dataset.file);
+  flush();
+}
+
+async function flush() {
+  clearTimeout(saveTimer);
+  if (!cur || !Object.keys(dirty).length) return;
+  const body = dirty; dirty = {};
+  await api('/api/ticket/' + cur, body);
+}
+
+async function act(what) {
+  if (!cur) return;
+  const id = cur, fields = dirty; dirty = {}; clearTimeout(saveTimer);
+  const i = S.drafts.findIndex(t => t.id === id);
+  const next = S.drafts[i + 1] || S.drafts[i - 1];
+  await api(`/api/ticket/${id}/${what}`, {fields});
+  if (what === 'approve') toast(`${id} approved. It's in the hand-off on the right.`);
+  if (what === 'reject') toast(`${id} rejected.`, 'Undo', () => api(`/api/ticket/${id}/review`).then(poll));
+  cur = what === 'later' ? (S.drafts.length > 1 ? next.id : id) : (next ? next.id : null);
+  lastJSON = ''; await poll();
+  if (cur && S.drafts.find(t => t.id === cur)) buildCard();
+}
+
+function redoOpen() { const r = $('#redo'); r.hidden = !r.hidden; if (!r.hidden) $('#redoHint').focus(); }
+async function redo() {
+  const t = S.drafts.find(x => x.id === cur);
+  const hint = $('#redoHint').value.trim();
+  if (!t || !hint) { $('#redoHint').focus(); return; }
+  await api('/api/clip/retry', {clip: t.clip, hint});
+  toast('Redoing that clip with your hint. The new draft shows up here.');
+  cur = null; lastJSON = ''; poll();
+}
+
+// ---------- the right column: hand-off, sent, failed, rejected ----------
+
+function renderSide() {
+  let h = '<section><h3>Ready to hand off</h3>';
+  if (!S.trays.length) h += '<div class="hint">Approved tickets collect here as one prompt per game. Copy it, or drag it into your programmer agent.</div>';
+  S.trays.forEach((tr, i) => {
+    const tickets = tr.tickets;
+    h += `<div class="tray"><div class="head"><b>${esc(tr.game)}</b><span>${tr.ids.length} ticket${tr.ids.length > 1 ? 's' : ''}</span></div>
+      ${tickets.map(t => `<div class="trow"><span class="id">${esc(t.id)}</span><span class="t">${esc(t.title)}</span>
+        <button title="Back to review" onclick="backToReview('${t.id}')">↩</button></div>`).join('')}
+      <div class="go"><button class="btn blue" onclick="copyTray(${i})">Copy prompt</button>
+        <div class="drag" draggable="true" data-tray="${i}" title="Drag into your agent's chat, or onto Finder for a .md file">⠿ Drag</div></div>
+      <details><summary>Preview the prompt</summary><pre>${esc(tr.prompt)}</pre></details></div>`;
+  });
+  h += '</section>';
+
+  if (S.failed.length) {
+    h += '<section><h3>Couldn\'t analyse</h3>' + S.failed.map(f => `<div class="srow"><div class="t">${esc(f.game || '')} ${esc(clipName(f.clip))}
+      <small class="fail" title="${esc(f.error)}">${esc(f.error)}</small></div><button data-clip="${esc(f.clip)}" onclick="retry(this.dataset.clip)">Retry</button></div>`).join('') + '</section>';
+  }
+  if (S.sent.length) {
+    h += '<section><h3>Sent</h3>' + S.sent.map(s => `<div class="srow"><div class="t">${esc(s.game)} · ${s.tickets.length} ticket${s.tickets.length > 1 ? 's' : ''}
+      <small>${esc(new Date(s.at).toLocaleString([], {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}))} · ${esc(s.tickets.join(', '))}</small></div>
+      <button onclick="copySent('${s.id}')">Copy again</button><button class="quiet" onclick="undoSent('${s.id}')">Undo</button></div>`).join('') + '</section>';
+  }
+  if (S.rejected.length) {
+    h += `<section><details class="rej"><summary>Rejected (${S.rejected.length})</summary>` + S.rejected.map(r => `<div class="srow"><div class="t">${esc(r.title)}
+      <small>${esc(r.id)} · ${esc(r.game)}</small></div><button onclick="restore('${r.id}')">Restore</button></div>`).join('') + '</details></section>';
+  }
+  const open = $('#side details.rej')?.open, pre = [...document.querySelectorAll('#side .tray details')].map(d => d.open);
+  $('#side').innerHTML = h;
+  if (open) $('#side details.rej').open = true;
+  document.querySelectorAll('#side .tray details').forEach((d, i) => { if (pre[i]) d.open = true; });
+  document.querySelectorAll('.drag').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      const tr = S.trays[+el.dataset.tray];
+      e.dataTransfer.setData('text/plain', tr.prompt);
+      const name = `QA ${tr.game} (${tr.ids.length}).md`.replace(/[:/]/g, '-');
+      e.dataTransfer.setData('DownloadURL', `text/markdown:${name}:${location.origin}/api/tray.md?game=${encodeURIComponent(tr.game)}`);
+      e.dataTransfer.effectAllowed = 'copy';
+      el._tray = tr; dragging = true;
+    });
+    el.addEventListener('dragend', e => { dragging = false; if (e.dataTransfer.dropEffect !== 'none') commit(el._tray, 'Dropped'); });
+  });
+}
+
+async function copyText(txt) {
+  try { await navigator.clipboard.writeText(txt); return true; } catch (e) {}
+  const ta = document.createElement('textarea');
+  ta.value = txt; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove(); return ok;
+}
+
+async function copyTray(i) {
+  const tr = S.trays[i];
+  if (await copyText(tr.prompt)) commit(tr, 'Copied');
+  else toast('The browser blocked the clipboard. Use Drag, or copy it from "Preview the prompt".');
+}
+
+async function commit(tr, verb) {
+  const r = await api('/api/handoff', {game: tr.game, ids: tr.ids});
+  const n = tr.ids.length;
+  if (r.ok) toast(`${verb} ${n} ${tr.game} ticket${n > 1 ? 's' : ''}. Paste into your programmer agent.`, 'Undo',
+    () => api(`/api/handoff/${r.handoff.id}/undo`).then(() => { lastJSON = ''; poll(); }));
+  lastJSON = ''; poll();
+}
+
+async function copySent(id) {
+  const txt = await (await fetch(`/api/handoff/${id}.md`)).text();
+  toast(await copyText(txt) ? 'Copied again.' : 'The browser blocked the clipboard.');
+}
+async function undoSent(id) { await api(`/api/handoff/${id}/undo`); toast('Back in "Ready to hand off".'); lastJSON = ''; poll(); }
+async function backToReview(id) { await api(`/api/ticket/${id}/review`); lastJSON = ''; poll(); }
+async function restore(id) { await api(`/api/ticket/${id}/review`); toast(`${id} is back in review.`); lastJSON = ''; poll(); }
+async function retry(clip) { await api('/api/clip/retry', {clip}); toast('Trying that clip again.'); lastJSON = ''; poll(); }
+
+let toastTimer;
+function toast(msg, label, fn) {
+  const el = $('#toast');
+  el.innerHTML = `<span>${esc(msg)}</span>` + (label ? `<button>${esc(label)}</button>` : '');
+  if (label) $('button', el).onclick = () => { el.classList.remove('on'); fn(); };
+  el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), label ? 7000 : 3500);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { $('#lightbox').classList.remove('on'); document.activeElement.blur(); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); act('approve'); return; }
+  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (typing || e.metaKey || e.ctrlKey || e.altKey || !cur) return;
+  const k = e.key.toLowerCase();
+  if (k === 'a') act('approve');
+  else if (k === 'r') act('reject');
+  else if (k === 'l') act('later');
+});
+window.addEventListener('beforeunload', flush);
+</script>
+</body>
+</html>

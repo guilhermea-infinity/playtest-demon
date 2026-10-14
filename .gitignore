@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+.gradle/
+**/build/
+android/local.properties
+out/
+QA-Inbox/
+work/
+.lavish/
+*.keystore
+*.jks
+.env
