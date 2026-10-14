@@ -35,7 +35,7 @@ final class Clips {
         return f;
     }
 
-    static void writeMeta(Context c, Recorder.Clip clip, String app, long wallMs, Recorder r) {
+    static void writeMeta(Context c, Recorder.Clip clip, String app, String game, long wallMs, Recorder r) {
         try {
             JSONObject j = new JSONObject();
             PackageManager pm = c.getPackageManager();
@@ -48,6 +48,8 @@ final class Clips {
                 } catch (Exception ignored) { }
             }
             SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US);
+            j.put("game", game);
+            j.put("lookbackSeconds", r.lookbackUs / 1_000_000);
             j.put("appLabel", label != null ? label : "Unknown app");
             j.put("app", app);
             j.put("appVersion", version);

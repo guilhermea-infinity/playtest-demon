@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 
 import desk_handoff
+from desk_games import games
+from desk_models import validate_effort
 
 KINDS = ("bug", "change", "polish", "crash", "idea")
 PRIORITIES = ("high", "normal", "low")
@@ -56,7 +58,7 @@ class Store:
         for d in (self.root, self.handoff_dir, self.work):
             d.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
-        self.settings = {"provider": "claude", "model": "", "paused": False, **read_json(self.root / "settings.json", {})}
+        self.settings = {"provider": "claude", "model": "", "paused": False, "effort": "", **read_json(self.root / "settings.json", {})}
         self.flags = {}  # auth state and the like, shown as banners in the page
         self.clips = read_json(self.root / "clips.json", {})
         self.handoffs = read_json(self.root / "handoffs.json", [])
@@ -68,7 +70,17 @@ class Store:
         for c in self.clips.values():  # a run cut off by a restart goes back in the queue
             if c.get("status") == "working":
                 c["status"] = "queued"
+        for rel, c in self.clips.items():
+            meta = c.get('meta', {})
+            if not meta.get('game'):
+                path = (self.inbox / rel).resolve()
+                sidecar = read_json(path.with_suffix('.json'), {}) if self.inbox.resolve() in path.parents else {}
+                label = sidecar.get('game') or sidecar.get('appLabel') or next((t['game'] for t in self.tickets.values() if t.get('clip') == rel and t.get('game')), None) or meta.get('appLabel') or meta.get('app')
+                if isinstance(label, str) and label.strip():
+                    meta['game'] = ' '.join(label.split())[:80]
         self._save_clips()
+        games(self.inbox, {t['game'] for t in self.tickets.values() if t.get('game')} |
+              {c['meta'].get('game') or c['meta'].get('appLabel') or c['meta'].get('app') for c in self.clips.values() if c.get('meta') and (c['meta'].get('game') or c['meta'].get('appLabel') or c['meta'].get('app'))})
 
     # ---- clips ----
 
@@ -133,9 +145,19 @@ class Store:
             return True
 
     def configure(self, fields):
+        # Capability discovery can involve a CLI startup. Never hold the queue lock while waiting.
+        if fields.get('effort'):
+            previous = self.config()
+            provider = fields.get('provider', previous['provider'])
+            model = fields.get('model', previous['model'])
+            if (provider, model, fields['effort']) != (previous['provider'], previous['model'], previous.get('effort', '')):
+                validate_effort(provider, model, fields['effort'])
         with self.lock:
             provider = fields.get("provider", self.settings["provider"])
             model = fields.get("model", self.settings["model"])
+            effort = fields.get("effort", "" if provider != self.settings['provider'] or model != self.settings['model'] else self.settings.get('effort', ''))
+            if not isinstance(effort, str) or effort not in ('', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'):
+                raise ValueError('Invalid effort level')
             paused = fields.get("paused", self.settings["paused"])
             if provider not in ("claude", "codex"):
                 raise ValueError("Choose Claude Code or Codex CLI")
@@ -143,7 +165,7 @@ class Store:
                 raise ValueError("Model must be a model ID without spaces, or blank for the CLI default")
             if not isinstance(paused, bool):
                 raise ValueError("Paused must be true or false")
-            self.settings = {"provider": provider, "model": model, "paused": paused}
+            self.settings = {"provider": provider, "model": model, "effort": effort, "paused": paused}
             write_json(self.root / "settings.json", self.settings)
             self.flags.pop("auth", None)
             return dict(self.settings)
@@ -295,7 +317,7 @@ class Store:
                               key=lambda t: t.get("updated", ""), reverse=True)[:30]
             working = next(({"clip": rel, **{k: c.get(k) for k in ("step", "startedAt", "meta")}}
                             for rel, c in self.clips.items() if c.get("status") == "working"), None)
-            failed = [{"clip": rel, "error": c.get("error"), "game": (c.get("meta") or {}).get("app")}
+            failed = [{"clip": rel, "error": c.get("error"), "game": (c.get("meta") or {}).get("game") or (c.get("meta") or {}).get("app")}
                       for rel, c in self.clips.items() if c.get("status") == "failed"]
             clips = []
             for rel, c in sorted(self.clips.items(), key=lambda item: item[1].get("queuedAt", 0), reverse=True):
@@ -305,6 +327,7 @@ class Store:
             return copy.deepcopy({
                 "clips": clips,
                 "settings": self.settings,
+                "games": games(self.inbox),
                 "drafts": drafts,
                 "trays": self.trays(),
                 "sent": [h for h in reversed(self.handoffs) if not h.get("undone")][:12],

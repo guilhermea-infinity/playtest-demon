@@ -4,26 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QA Desk</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2334c759'/%3E%3Cpath d='M12 8v16l13-8z' fill='%230e0e10'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230d131b'/%3E%3Cpath d='M16 16C10 5 2 11 4 18S12 23 16 16C22 5 30 11 28 18S20 23 16 16' fill='none' stroke='%2378d5d7' stroke-width='2.5'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 <header>
-  <a class="brand" href="#videos"><span class="brandmark">▶</span> QA <b>Desk</b><small>ANDROID</small></a>
+  <a class="brand" href="#videos"><span class="brandmark">∞</span><span class="brand-copy"><small>INFINITY GAMES</small>QA <b>Desk</b></span></a>
   <nav aria-label="Workspace"><button id="nav-videos" onclick="go('videos')">Videos <span id="videoCount">0</span></button><button id="nav-review" onclick="go('review')">Review <span id="reviewCount">0</span></button><button id="nav-handoffs" onclick="go('handoffs')">Handoffs <span id="handoffCount">0</span></button></nav>
   <button class="settings-button" onclick="openSettings()">⚙ <span id="engineLabel">Analyst settings</span></button>
 </header>
 <div class="connection"><div class="status" id="status" role="status"></div><span>Android → Mac → your coding agent</span></div>
 <div id="banner"></div>
+<div class="gamebar"><label for="gamePicker">GAME</label><select id="gamePicker" onchange="pickGame(this.value)"><option value="">All games</option></select><button class="text-button" onclick="addGameOpen()">+ Add game</button><span id="gameScope" class="hint">Your whole QA workspace</span></div>
+<dialog id="gameDialog"><form onsubmit="event.preventDefault(); addGame()"><div class="dialog-top"><h2>Add a game</h2><button type="button" aria-label="Close" onclick="$('#gameDialog').close()">✕</button></div><p>Just a name. It will also appear on your connected phone.</p><label for="newGame">Game name</label><input id="newGame" required maxlength="80" placeholder="e.g. Dominate Lands" autocomplete="off"><div class="dialog-actions"><button type="button" class="btn" onclick="$('#gameDialog').close()">Cancel</button><button class="btn go">Add & select</button></div></form></dialog>
 <section id="videosView" class="view">
-  <div class="page-heading"><div><div class="eyebrow">YOUR QA SESSION</div><h1>Every clip. One clear queue.</h1><p>Record on your phone. Follow the analysis here. Review when you're ready.</p></div><button class="btn go" onclick="go('review')">Review tickets <span id="reviewCTA">→</span></button></div>
+  <div class="page-heading"><div><div class="eyebrow">INFINITY GAMES / QA WORKSPACE</div><h1>Catch it. Fix it. Keep playing.</h1><p>Record on your phone. Follow the analysis here. Review when you're ready.</p></div><button class="btn go" onclick="go('review')">Review tickets <span id="reviewCTA">→</span></button></div>
   <div id="stats" class="stats"></div>
   <div class="toolbar"><div class="filters" role="group" aria-label="Filter videos"><button data-filter="all" onclick="filterClips('all')">All videos</button><button data-filter="active" onclick="filterClips('active')">In progress</button><button data-filter="review" onclick="filterClips('review')">To review</button><button data-filter="failed" onclick="filterClips('failed')">Needs attention</button></div><input id="clipSearch" type="search" aria-label="Search videos" placeholder="Search game or clip…" oninput="renderClips()"><button id="pause" class="btn" onclick="togglePause()">Pause queue</button></div>
   <div id="clipGrid" class="clip-grid"></div>
 </section>
 <main id="main" class="view" hidden><div id="review"></div></main>
 <section id="handoffsView" class="view" hidden><div class="page-heading"><div><div class="eyebrow">READY FOR YOUR CODING AGENT</div><h1>From approved to actionable.</h1><p>One prompt per game, with the evidence and acceptance criteria included.</p></div></div><aside id="side"></aside></section>
-<dialog id="settingsDialog"><form onsubmit="event.preventDefault(); saveSettings()"><div class="dialog-top"><h2>Choose your analyst</h2><button type="button" aria-label="Close settings" onclick="$('#settingsDialog').close()">✕</button></div><p>Changes apply to the next video. The current analysis finishes with its original model.</p><label for="provider">Provider</label><select id="provider" onchange="$('#model').value='' "><option value="claude">Claude Code</option><option value="codex">Codex CLI · OpenAI / ChatGPT</option></select><label for="model">Model</label><input id="model" placeholder="CLI default (leave blank)" autocomplete="off"><p class="hint">Enter any vision-capable model ID available to your account. Blank uses your CLI's configured default. Sign in to the chosen CLI on this Mac first.</p><div id="toolStatus" class="hint"></div><div class="dialog-actions"><button type="button" class="btn" onclick="$('#settingsDialog').close()">Cancel</button><button class="btn go">Save settings</button></div></form></dialog>
+<dialog id="settingsDialog"><form onsubmit="event.preventDefault(); saveSettings()"><div class="dialog-top"><h2>Choose your analyst</h2><button type="button" aria-label="Close settings" onclick="$('#settingsDialog').close()">✕</button></div><p>Changes apply to the next video. The current analysis finishes with its original model.</p><label for="provider">Provider</label><select id="provider" onchange="loadModels()"><option value="claude">Claude Code</option><option value="codex">Codex CLI · OpenAI / ChatGPT</option></select><div class="model-heading"><label for="model">Model</label><button type="button" class="text-button" onclick="loadModels(true, $('#model').value, $('#effort').value)">↻ Refresh models</button></div><select id="model" onchange="renderEfforts()"></select><p id="modelDescription" class="hint"></p><label for="effort">Reasoning effort</label><select id="effort"></select><p id="modelStatus" class="hint" role="status"></p><div id="toolStatus" class="hint"></div><div class="dialog-actions"><button type="button" class="btn" onclick="$('#settingsDialog').close()">Cancel</button><button id="saveAnalyst" class="btn go">Save settings</button></div></form></dialog>
 <dialog id="clipDialog"><div class="dialog-top"><h2 id="clipTitle">Clip</h2><button aria-label="Close video" onclick="closeClip()">✕</button></div><video id="clipVideo" controls playsinline></video><p id="clipSummary"></p></dialog>
 <div id="toast" role="status"></div>
 <div id="lightbox" role="dialog" aria-label="Screenshot preview" onclick="this.classList.remove('on')"><img alt="Ticket evidence"></div>
@@ -36,6 +38,9 @@ const mmss = t => { t = Math.max(0, Math.round(+t || 0)); return Math.floor(t / 
 const clipName = rel => (rel || '').split('/').pop().replace(/\.mp4$/, '');
 const KINDS = ['bug', 'change', 'polish', 'crash', 'idea'], PRIOS = ['high', 'normal', 'low'];
 
+let selectedGame = localStorage.getItem('qa-game') || '', modelCatalog = [], modelRequest = 0;
+const gameOf = c => c.meta.game || c.meta.appLabel || c.meta.app || c.clip.split('/')[0];
+const drafts = () => S.drafts.filter(t => !selectedGame || t.game === selectedGame);
 let S = null, lastJSON = '', cur = null, dirty = {}, saveTimer = null, dragging = false;
 let view = ['videos','review','handoffs'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'videos', clipFilter = 'all', acting = false, saving = Promise.resolve();
 
@@ -65,7 +70,7 @@ function renderStatus() {
   let h;
   if (w) {
     const secs = Math.round(Date.now() / 1000 - (w.startedAt || Date.now() / 1000));
-    const game = (w.meta && w.meta.app) || '';
+    const game = w.meta?.game || w.meta?.appLabel || w.meta?.app || '';
     h = `<span class="spin"></span><span>${esc(w.step || 'Working')} · ${esc(game)} ${esc(clipName(w.clip).slice(11))} · ${mmss(secs)}</span>`;
     if (S.queued) h += `<span>· ${S.queued} more waiting</span>`;
   } else if (S.settings.paused) {
@@ -82,10 +87,11 @@ function renderStatus() {
 
 function render() {
   renderStatus();
-  const nd = S.drafts.length, na = S.trays.reduce((n, t) => n + t.ids.length, 0);
-  $('#videoCount').textContent = S.clips.length; $('#reviewCount').textContent = nd; $('#handoffCount').textContent = na;
+  renderGames();
+  const nd = drafts().length, na = S.trays.filter(t => !selectedGame || t.game === selectedGame).reduce((n, t) => n + t.ids.length, 0);
+  $('#videoCount').textContent = S.clips.filter(c => !selectedGame || gameOf(c) === selectedGame).length; $('#reviewCount').textContent = nd; $('#handoffCount').textContent = na;
   $('#reviewCTA').textContent = nd ? `(${nd}) →` : '→';
-  $('#engineLabel').textContent = (S.settings.provider === 'codex' ? 'Codex' : 'Claude') + ' · ' + (S.settings.model || 'CLI default');
+  $('#engineLabel').textContent = (S.settings.provider === 'codex' ? 'Codex' : 'Claude') + ' · ' + (S.settings.model || 'CLI default') + (S.settings.effort ? ' · ' + S.settings.effort : '');
   document.title = (nd ? `(${nd}) ` : '') + 'QA Desk';
 
   const auth = S.flags.auth, provider = S.settings.provider, login = provider === 'codex' ? 'codex login' : 'claude auth login';
@@ -108,27 +114,91 @@ async function go(name) {
 window.addEventListener('hashchange', () => { const name = location.hash.slice(1); if (['videos','review','handoffs'].includes(name) && name !== view) go(name); });
 function filterClips(value) { clipFilter = value; renderClips(); }
 function renderClips() {
-  const clips = S.clips, active = clips.filter(c => ['working','queued'].includes(c.status)).length;
+  const clips = S.clips.filter(c => !selectedGame || gameOf(c) === selectedGame), active = clips.filter(c => ['working','queued'].includes(c.status)).length;
   const ready = clips.filter(c => c.draftIds.length).length, done = clips.filter(c => c.status === 'done' && !c.draftIds.length).length;
-  $('#stats').innerHTML = [[clips.length, 'Videos received'], [active, 'In the pipeline'], [S.drafts.length, 'Tickets to review'], [done, 'Videos reviewed']].map(([n,l]) => `<div class="stat"><strong>${n}</strong><span>${l}</span></div>`).join('');
+  $('#stats').innerHTML = [[clips.length, 'Videos received'], [active, 'In the pipeline'], [drafts().length, 'Tickets to review'], [done, 'Videos reviewed']].map(([n,l]) => `<div class="stat"><strong>${n}</strong><span>${l}</span></div>`).join('');
   $('#pause').textContent = S.settings.paused ? 'Resume queue' : 'Pause queue';
   document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('on', b.dataset.filter === clipFilter));
   const query = $('#clipSearch').value.trim().toLowerCase();
-  const shown = clips.filter(c => (clipFilter === 'all' || clipFilter === 'active' && ['working','queued'].includes(c.status) || clipFilter === 'review' && c.draftIds.length || clipFilter === 'failed' && c.status === 'failed') && (c.clip + ' ' + (c.meta.appLabel || c.meta.app || '')).toLowerCase().includes(query));
+  const shown = clips.filter(c => (clipFilter === 'all' || clipFilter === 'active' && ['working','queued'].includes(c.status) || clipFilter === 'review' && c.draftIds.length || clipFilter === 'failed' && c.status === 'failed') && (c.clip + ' ' + gameOf(c)).toLowerCase().includes(query));
   $('#clipGrid').innerHTML = shown.map(c => {
-    const game = c.meta.appLabel || c.meta.app || c.clip.split('/')[0];
+    const game = gameOf(c);
     const status = c.status === 'done' ? (c.draftIds.length ? 'Ready to review' : 'Reviewed') : ({working: 'Analysing', queued: S.settings.paused ? 'Paused' : 'Queued', failed: 'Needs attention', skipped: 'Skipped'}[c.status] || c.status);
-    const preview = c.preview || S.drafts.find(t => t.clip === c.clip)?.shots?.[0]?.clean;
+    const preview = c.preview || drafts().find(t => t.clip === c.clip)?.shots?.[0]?.clean;
     const step = c.status === 'working' ? c.step : c.status === 'queued' ? 'Starts automatically when the analyst is ready' : c.status === 'failed' ? c.error : c.summary || 'Waiting for your review';
     return `<article class="clip-card ${c.status}"><button class="clip-cover" data-clip="${esc(c.clip)}" onclick="previewClip(this.dataset.clip)" aria-label="Play ${esc(game)} clip">${preview ? `<img src="${media(preview)}" loading="lazy" alt="">` : '<span class="placeholder">▶</span>'}<span class="play-overlay">▶ Watch clip</span><span class="duration">${mmss(c.meta.clipSeconds)}</span></button><div class="clip-body"><div class="clip-top"><span class="badge ${c.status}">${c.status === 'working' ? '<span class="spin"></span>' : ''}${status}</span><span class="hint">${c.ticketCount ? c.ticketCount + (c.ticketCount === 1 ? ' ticket' : ' tickets') : ''}</span></div><h2>${esc(game)}</h2><div class="clip-date">${esc(clipName(c.clip))}</div><p class="clip-step">${esc(step)}</p><div class="clip-footer"><span class="hint">${esc(c.provider ? c.provider + ' · ' + c.model : c.status === 'done' ? 'Analysis complete' : 'Awaiting analysis')}</span>${c.draftIds.length ? `<button class="text-button" data-id="${c.draftIds[0]}" onclick="reviewClip(this.dataset.id)">Review ${c.draftIds.length} →</button>` : ['failed','skipped'].includes(c.status) ? `<button class="text-button" data-clip="${esc(c.clip)}" onclick="retry(this.dataset.clip)">${c.status === 'failed' ? 'Retry analysis' : 'Analyse'}</button>` : ''}</div></div></article>`;
   }).join('') || `<div class="empty"><div class="empty-icon">↥</div><h2>${clips.length ? 'No matching videos' : 'Your next finding starts on the phone'}</h2><p>${clips.length ? 'Try another filter or search.' : 'Start a QA Clip session on Android. Press Volume Up to capture a moment, then press again to send it here.'}</p></div>`;
 }
 async function reviewClip(id) { await go('review'); await openTicket(id); }
-function previewClip(rel) { const c = S.clips.find(c => c.clip === rel); $('#clipTitle').textContent = c.meta.appLabel || c.meta.app || clipName(rel); $('#clipSummary').textContent = c.summary || c.step || 'Analysis has not finished yet.'; $('#clipVideo').src = media(rel); $('#clipDialog').showModal(); }
+function previewClip(rel) { const c = S.clips.find(c => c.clip === rel); $('#clipTitle').textContent = gameOf(c); $('#clipSummary').textContent = c.summary || c.step || 'Analysis has not finished yet.'; $('#clipVideo').src = media(rel); $('#clipDialog').showModal(); }
 function closeClip() { $('#clipVideo').pause(); $('#clipDialog').close(); }
 $('#clipDialog').addEventListener('close', () => $('#clipVideo').pause());
-function openSettings() { if (!S) return; $('#provider').value = S.settings.provider; $('#model').value = S.settings.model; const t = S.flags.tools || {}; $('#toolStatus').textContent = ['ffmpeg','ffprobe','whisper','whisper_model','claude','codex'].map(k => `${k}: ${t[k] ? 'available' : 'not found'}`).join(' · '); $('#settingsDialog').showModal(); }
-async function saveSettings() { try { await api('/api/settings', {provider: $('#provider').value, model: $('#model').value.trim()}); $('#settingsDialog').close(); toast('Analyst saved. Applies to the next video.'); lastJSON = ''; await poll(); } catch (e) { toast(e.message); } }
+function renderGames() {
+  const names = [...new Set([...(S.games || []), ...S.clips.map(gameOf), ...S.drafts.map(t => t.game)])].sort((a,b) => a.localeCompare(b));
+  if (selectedGame && !names.includes(selectedGame)) names.push(selectedGame);
+  const html = '<option value="">All games</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if ($('#gamePicker').innerHTML !== html) $('#gamePicker').innerHTML = html;
+  $('#gamePicker').value = selectedGame;
+  $('#gameScope').textContent = selectedGame ? 'Videos, reviews & handoffs for this game' : 'Your whole QA workspace';
+}
+async function pickGame(name) {
+  try { await flush(); } catch { $('#gamePicker').value = selectedGame; return; }
+  $('#vid')?.pause(); selectedGame = name; localStorage.setItem('qa-game', name); cur = null; render();
+}
+function addGameOpen() { $('#newGame').value = ''; $('#gameDialog').showModal(); $('#newGame').focus(); }
+async function addGame() {
+  try {
+    const name = $('#newGame').value.trim().replace(/\s+/g, ' '), result = await api('/api/games', {name});
+    S.games = result.games; $('#gameDialog').close();
+    await pickGame(result.games.find(n => n.toLowerCase() === name.toLowerCase()) || name);
+    toast('Game added. Your phone syncs it when connected.');
+  } catch (e) { toast(e.message); }
+}
+function openSettings() {
+  if (!S) return;
+  $('#provider').value = S.settings.provider;
+  const t = S.flags.tools || {};
+  $('#toolStatus').textContent = ['ffmpeg','ffprobe','whisper','whisper_model','claude','codex'].map(k => `${k}: ${t[k] ? 'available' : 'not found'}`).join(' · ');
+  $('#settingsDialog').showModal(); loadModels(false, S.settings.model, S.settings.effort);
+}
+async function loadModels(refresh = false, selected = '', effort = '') {
+  const request = ++modelRequest, provider = $('#provider').value;
+  $('#model').disabled = $('#effort').disabled = $('#saveAnalyst').disabled = true;
+  $('#modelStatus').textContent = 'Reading models from your installed CLI…';
+  $('#model').innerHTML = '<option value="">Loading…</option>'; $('#effort').innerHTML = '';
+  try {
+    const response = await fetch('/api/models?provider=' + provider + (refresh ? '&refresh=1' : ''));
+    if (!response.ok) throw new Error('Could not read models');
+    const data = await response.json();
+    if (request !== modelRequest) return;
+    modelCatalog = data.models || [];
+    $('#model').innerHTML = '<option value="">Use CLI configured default</option>' + modelCatalog.map(m => `<option value="${esc(m.id)}">${esc(m.name)}${m.resolved ? ' · ' + esc(m.resolved) : ''}</option>`).join('');
+    if (selected && !modelCatalog.some(m => m.id === selected)) {
+      const option = new Option(selected + ' · saved selection (not listed)', selected); $('#model').add(option);
+    }
+    $('#model').value = selected;
+    renderEfforts(effort);
+    $('#modelStatus').textContent = data.error || 'Live CLI catalog. Access depends on your account; analysis will report any restriction.';
+  } catch (e) {
+    if (request !== modelRequest) return;
+    modelCatalog = []; $('#model').innerHTML = '<option value="">Use CLI configured default</option>';
+    if (selected) $('#model').add(new Option(selected + ' · saved selection', selected));
+    $('#model').value = selected; renderEfforts(effort); $('#modelStatus').textContent = e.message + '. Refresh to retry.';
+  } finally {
+    if (request === modelRequest) { $('#model').disabled = false; $('#saveAnalyst').disabled = false; }
+  }
+}
+function renderEfforts(selected = '') {
+  const m = modelCatalog.find(m => m.id === $('#model').value);
+  $('#modelDescription').textContent = m?.description || 'Uses your CLI configuration. Choose a listed model to customize effort.';
+  $('#effort').innerHTML = `<option value="">${m?.defaultEffort ? 'CLI default (model suggests ' + esc(m.defaultEffort) + ')' : 'CLI default effort'}</option>` + (m?.efforts || []).map(e => `<option value="${esc(e)}">${esc(e[0].toUpperCase()+e.slice(1))}</option>`).join('');
+  $('#effort').disabled = !m?.efforts?.length;
+  if (selected && !(m?.efforts || []).includes(selected)) $('#effort').add(new Option(selected + ' · saved setting (not listed)', selected));
+  $('#effort').value = selected || '';
+}
+async function saveSettings() {
+  try { await api('/api/settings', {provider: $('#provider').value, model: $('#model').value, effort: $('#effort').value}); $('#settingsDialog').close(); toast('Analyst saved. Applies to the next video.'); lastJSON = ''; await poll(); } catch (e) { toast(e.message); }
+}
 async function togglePause() { try { await api('/api/settings', {paused: !S.settings.paused}); lastJSON = ''; await poll(); } catch (e) { toast(e.message); } }
 
 
@@ -136,14 +206,14 @@ async function togglePause() { try { await api('/api/settings', {paused: !S.sett
 
 function renderReview() {
   const box = $('#review');
-  if (!S.drafts.length) {
+  if (!drafts().length) {
     cur = null;
-    const busy = S.working || S.queued;
+    const busy = S.clips.some(c => (!selectedGame || gameOf(c) === selectedGame) && ['working','queued'].includes(c.status));
     box.innerHTML = `<div class="empty"><h2>${busy ? 'Drafting tickets…' : 'You’re all caught up'}</h2>
       <div>${busy ? 'Your analyst is processing the queue. New tickets will appear here automatically.' : 'Press Vol + on the phone when you see something. Every clip is drafted here by itself.'}</div></div>`;
     return;
   }
-  if (!S.drafts.find(t => t.id === cur)) { cur = S.drafts[0].id; buildCard(); }
+  if (!drafts().find(t => t.id === cur)) { cur = drafts()[0].id; buildCard(); }
   else if (!$('.card', box)) buildCard();
   else { renderTabs(); requestAnimationFrame(sizeAll); }
 }
@@ -151,14 +221,14 @@ function renderReview() {
 function renderTabs() {
   const el = $('#tabs');
   if (!el) return;
-  const i = S.drafts.findIndex(t => t.id === cur);
-  el.innerHTML = `<button class="text-button" onclick="go('videos')">← All videos</button><span class="count">Ticket ${i + 1} of ${S.drafts.length}</span><div class="grow"></div><span class="hint">Edits save automatically</span><button class="btn compact" ${i === 0 ? 'disabled' : ''} onclick="openTicket('${S.drafts[i-1]?.id}')">← Previous</button><button class="btn compact" ${i === S.drafts.length-1 ? 'disabled' : ''} onclick="openTicket('${S.drafts[i+1]?.id}')">Next →</button>`;
+  const i = drafts().findIndex(t => t.id === cur);
+  el.innerHTML = `<button class="text-button" onclick="go('videos')">← Videos</button><span class="count">Ticket ${i + 1} of ${drafts().length}</span><div class="grow"></div><span class="hint">Edits save automatically</span><button class="btn compact" ${i === 0 ? 'disabled' : ''} onclick="openTicket('${drafts()[i-1]?.id}')">← Previous</button><button class="btn compact" ${i === drafts().length-1 ? 'disabled' : ''} onclick="openTicket('${drafts()[i+1]?.id}')">Next →</button>`;
 }
 
 async function openTicket(id) { try { await flush(); } catch { return; } cur = id; buildCard(); }
 
 function buildCard() {
-  const t = S.drafts.find(x => x.id === cur);
+  const t = drafts().find(x => x.id === cur);
   if (!t) return;
   dirty = {};
   const m = t.moment || {}, q = t.quote;
@@ -251,7 +321,7 @@ async function flush() {
     if (!id || !Object.keys(body).length) return;
     try {
       await api('/api/ticket/' + id, body);
-      const t = S.drafts.find(t => t.id === id); if (t) Object.assign(t, Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'quote' && k !== 'useShots')));
+      const t = drafts().find(t => t.id === id); if (t) Object.assign(t, Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'quote' && k !== 'useShots')));
     } catch (e) { if (cur === id) dirty = {...body, ...dirty}; toast('Changes not saved. ' + e.message); throw e; }
   })();
   return saving;
@@ -263,20 +333,20 @@ async function act(what) {
   document.querySelectorAll('.actions button').forEach(b => b.disabled = true);
   try {
     await flush();
-    const id = cur, i = S.drafts.findIndex(t => t.id === id), next = S.drafts[i + 1] || S.drafts[i - 1];
+    const id = cur, i = drafts().findIndex(t => t.id === id), next = drafts()[i + 1] || drafts()[i - 1];
     await api(`/api/ticket/${id}/${what}`);
     if (what === 'approve') toast(`${id} approved. Find it in Handoffs.`, 'Undo', () => api(`/api/ticket/${id}/review`).then(poll));
     if (what === 'reject') toast(`${id} rejected.`, 'Undo', () => api(`/api/ticket/${id}/review`).then(poll));
-    cur = what === 'later' ? (S.drafts.length > 1 ? next.id : id) : (next ? next.id : null);
+    cur = what === 'later' ? (drafts().length > 1 ? next.id : id) : (next ? next.id : null);
     lastJSON = ''; await poll();
-    if (cur && S.drafts.find(t => t.id === cur)) buildCard();
+    if (cur && drafts().find(t => t.id === cur)) buildCard();
   } catch (e) { toast(e.message); }
   finally { acting = false; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); }
 }
 
 function redoOpen() { const r = $('#redo'); r.hidden = !r.hidden; if (!r.hidden) $('#redoHint').focus(); }
 async function redo() {
-  const t = S.drafts.find(x => x.id === cur);
+  const t = drafts().find(x => x.id === cur);
   const hint = $('#redoHint').value.trim();
   if (!t || !hint) { $('#redoHint').focus(); return; }
   await flush();
@@ -289,8 +359,9 @@ async function redo() {
 
 function renderSide() {
   let h = '<section><h3>Ready to hand off</h3>';
-  if (!S.trays.length) h += '<div class="hint">Approved tickets collect here as one prompt per game. Copy it, or drag it into your programmer agent.</div>';
+  if (!S.trays.some(t => !selectedGame || t.game === selectedGame)) h += '<div class="hint">Approved tickets collect here as one prompt per game. Copy it, or drag it into your programmer agent.</div>';
   S.trays.forEach((tr, i) => {
+    if (selectedGame && tr.game !== selectedGame) return;
     const tickets = tr.tickets;
     h += `<div class="tray"><div class="head"><b>${esc(tr.game)}</b><span>${tr.ids.length} ticket${tr.ids.length > 1 ? 's' : ''}</span></div>
       ${tickets.map(t => `<div class="trow"><span class="id">${esc(t.id)}</span><span class="t">${esc(t.title)}</span>
@@ -302,16 +373,16 @@ function renderSide() {
   h += '</section>';
 
   if (S.failed.length) {
-    h += '<section><h3>Couldn\'t analyse</h3>' + S.failed.map(f => `<div class="srow"><div class="t">${esc(f.game || '')} ${esc(clipName(f.clip))}
+    h += '<section><h3>Couldn\'t analyse</h3>' + S.failed.filter(f => !selectedGame || f.game === selectedGame).map(f => `<div class="srow"><div class="t">${esc(f.game || '')} ${esc(clipName(f.clip))}
       <small class="fail" title="${esc(f.error)}">${esc(f.error)}</small></div><button data-clip="${esc(f.clip)}" onclick="retry(this.dataset.clip)">Retry</button></div>`).join('') + '</section>';
   }
   if (S.sent.length) {
-    h += '<section><h3>Sent</h3>' + S.sent.map(s => `<div class="srow"><div class="t">${esc(s.game)} · ${s.tickets.length} ticket${s.tickets.length > 1 ? 's' : ''}
+    h += '<section><h3>Sent</h3>' + S.sent.filter(s => !selectedGame || s.game === selectedGame).map(s => `<div class="srow"><div class="t">${esc(s.game)} · ${s.tickets.length} ticket${s.tickets.length > 1 ? 's' : ''}
       <small>${esc(new Date(s.at).toLocaleString([], {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}))} · ${esc(s.tickets.join(', '))}</small></div>
       <button onclick="copySent('${s.id}')">Copy again</button><button class="quiet" onclick="undoSent('${s.id}')">Undo</button></div>`).join('') + '</section>';
   }
   if (S.rejected.length) {
-    h += `<section><details class="rej"><summary>Rejected (${S.rejected.length})</summary>` + S.rejected.map(r => `<div class="srow"><div class="t">${esc(r.title)}
+    h += `<section><details class="rej"><summary>Rejected (${S.rejected.length})</summary>` + S.rejected.filter(r => !selectedGame || r.game === selectedGame).map(r => `<div class="srow"><div class="t">${esc(r.title)}
       <small>${esc(r.id)} · ${esc(r.game)}</small></div><button onclick="restore('${r.id}')">Restore</button></div>`).join('') + '</details></section>';
   }
   const open = $('#side details.rej')?.open, pre = [...document.querySelectorAll('#side .tray details')].map(d => d.open);

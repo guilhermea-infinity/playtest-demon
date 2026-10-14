@@ -26,6 +26,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote_plus
 
+from desk_games import games, game_name
+
 PORT = 8799
 TYPE = "_qaclip._tcp"
 MAX_BYTES = 4 << 30
@@ -132,12 +134,32 @@ def make_handler(inbox, devices, name):
             return devices.status(key, dev, trusted=usb), dev
 
         def do_GET(self):
+            if self.path == '/games':
+                st, _ = self._who()
+                if st != 'approved':
+                    return self._json(403, {'ok': False})
+                return self._json(200, {'games': games(inbox)})
             if self.path.startswith("/ping"):
                 st, _ = self._who()
                 return self._json(200, {"ok": True, "name": name, "status": st})
             self._json(404, {"ok": False})
 
         def do_POST(self):
+            if self.path == '/games':
+                st, _ = self._who()
+                if st != 'approved':
+                    return self._json(403, {'ok': False})
+                try:
+                    n = int(self.headers.get('Content-Length', '0'))
+                    if not 0 < n <= 16384:
+                        raise ValueError('Invalid game request size')
+                    body = json.loads(self.rfile.read(n))
+                    names = body.get('games') if isinstance(body, dict) else None
+                    if not isinstance(names, list) or len(names) > 100:
+                        raise ValueError('Expected up to 100 game names')
+                    return self._json(200, {'games': games(inbox, names)})
+                except (ValueError, TypeError) as exc:
+                    return self._json(400, {'error': str(exc)})
             if not self.path.startswith("/clip"):
                 return self._json(404, {"ok": False})
             st, dev = self._who()
@@ -156,7 +178,14 @@ def make_handler(inbox, devices, name):
             except Exception:
                 meta = {}
 
-            game = safe(meta.get("appLabel") or meta.get("app") or "Unknown app")
+            try:
+                chosen = game_name(meta.get('game') or meta.get('appLabel') or meta.get('app') or 'Unknown app')
+            except ValueError:
+                chosen = 'Unknown app'
+            names = games(inbox, [chosen])
+            chosen = next(n for n in names if n.casefold() == chosen.casefold())
+            meta['game'] = chosen
+            game = safe(chosen)
             try:
                 when = datetime.datetime.fromisoformat(str(meta.get("pressedAt")))
             except Exception:
@@ -190,7 +219,7 @@ def make_handler(inbox, devices, name):
             meta.update({"file": rel, "fromDevice": dev, "receivedAt": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "bytes": got})
             (folder / f"{stem}.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False))
             with log_lock, open(log, "a") as f:
-                f.write(json.dumps({"file": rel, "app": game, "version": meta.get("appVersion"), "pressedAt": meta.get("pressedAt"),
+                f.write(json.dumps({"file": rel, "game": chosen, "app": game, "version": meta.get("appVersion"), "pressedAt": meta.get("pressedAt"),
                                     "pressedAtSecond": meta.get("pressedAtSecond"), "clipSeconds": meta.get("clipSeconds"),
                                     "voice": meta.get("voice"), "receivedAt": meta["receivedAt"]}, ensure_ascii=False) + "\n")
             secs = meta.get("clipSeconds")

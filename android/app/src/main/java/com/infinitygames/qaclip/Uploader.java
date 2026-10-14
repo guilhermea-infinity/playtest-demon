@@ -9,6 +9,7 @@ import android.provider.Settings;
 import android.util.Log;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -73,7 +74,10 @@ final class Uploader {
             try {
                 File[] clips = Clips.waiting(ctx);
                 String mac = reach();
-                if (mac != null) for (File f : clips) if (!send(mac, f)) break;
+                if (mac != null) {
+                    for (File f : clips) if (!send(mac, f)) break;
+                    syncGames(mac);
+                }
             } catch (Throwable t) {
                 Log.w(Recorder.TAG, "upload: " + t);
             }
@@ -120,6 +124,31 @@ final class Uploader {
         } finally {
             if (c != null) c.disconnect();
         }
+    }
+
+    private void syncGames(String target) {
+        HttpURLConnection c = null;
+        try {
+            Set<String> pending = Games.pending(ctx);
+            // Bound requests even after a long offline session.
+            Set<String> batch = new LinkedHashSet<>();
+            for (String name : pending) { if (batch.size() == 100) break; batch.add(name); }
+            c = open(target, "/games");
+            c.setConnectTimeout(2000);
+            c.setReadTimeout(3000);
+            if (!batch.isEmpty()) {
+                c.setRequestMethod("POST"); c.setDoOutput(true);
+                byte[] body = new JSONObject().put("games", new JSONArray(batch)).toString().getBytes(StandardCharsets.UTF_8);
+                c.setRequestProperty("Content-Type", "application/json");
+                c.setFixedLengthStreamingMode(body.length);
+                try (OutputStream out = c.getOutputStream()) { out.write(body); }
+            }
+            if (c.getResponseCode() == 200) {
+                JSONArray names = new JSONObject(read(c.getInputStream())).optJSONArray("games");
+                if (names != null) Games.received(ctx, names, batch);
+            }
+        } catch (Exception e) { Log.w(Recorder.TAG, "game sync: " + e); }
+        finally { if (c != null) c.disconnect(); }
     }
 
     private boolean send(String target, File mp4) {

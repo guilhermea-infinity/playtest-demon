@@ -2,7 +2,7 @@
 
 **Catch a bug on Android. Review a ticket on your Mac. Hand it to your coding agent.**
 
-QA Clip records the last 15 seconds before you press Volume Up and keeps recording until you press it again. Your voice goes with the video. QA Desk receives clips over USB or Wi-Fi, analyses them through **Codex CLI or Claude Code**, and turns findings into editable tickets.
+QA Clip keeps a configurable **0–30 second lookback** (10 seconds suggested) before you press Volume Up and keeps recording until you press it again. Your voice goes with the video. QA Desk receives clips over USB or Wi-Fi, analyses them through **Codex CLI or Claude Code**, and turns findings into editable tickets.
 
 **Android 10+ phones · macOS laptops · Python 3.10+ · local files · bring your own CLI login**
 
@@ -61,7 +61,11 @@ Launch your chosen provider:
 
 The browser opens at **http://127.0.0.1:8800**. After initial setup, double-click **QA Desk.command**. Keep its Terminal window open while testing.
 
-**Choose a model:** open the analyst settings at the top right. Choose Codex or Claude and enter any **vision-capable model ID available to your account**. Leave the field blank to use that CLI's configured default. Settings persist per inbox and apply to the next video. The provider and model used are recorded with each new analysis. No API key is needed when using the CLI's supported subscription login; provider access and usage limits still apply.
+**Choose a model:** open analyst settings at the top right. QA Desk reads the installed CLI’s model catalog and shows each model’s supported reasoning efforts. Choose **Use CLI configured default** to keep your CLI configuration, or select a listed model and effort. **Refresh models** reloads the catalog (normally cached for five minutes). Models and capabilities vary by CLI version and account; a catalog entry is not a guarantee of quota or access. Discovery does not send a clip or inference prompt. If discovery fails, the page explains why and preserves your saved choice. Settings apply to the next video; the current analysis keeps its original provider, model, and effort. No API key is needed with supported subscription login.
+
+**Choose a game:** on Android, tap the game name; use **+ Add game**, type one name, and you’re done. The Mac has the same quick-add flow. Names sync with your paired Mac over USB or Wi-Fi, and phone additions work offline. The phone’s selected game labels new clips; **Detect automatically** uses the foreground app’s name. QA Desk’s game picker filters videos, reviews, and handoffs without stopping the queue or changing the phone’s selection. Existing clips keep their original attribution.
+
+**Catch bugs after they happen:** the phone’s **Lookback** slider keeps 0–30 seconds before the first Volume Up press. **10 seconds is suggested** because it gives you time to notice a bug and react, without adding too much footage. This can capture a one-off bug you cannot reproduce. Set 0 to start recording only when you press; longer windows use more memory. Lookback starts buffering only after screen-sharing consent and stops with the session. Change it before starting a session. The actual lead-in may be shorter just after starting, or slightly longer to begin on a playable video keyframe.
 
 ### Enable voice transcription
 
@@ -94,6 +98,7 @@ On the phone:
 
 - Enable **QA Clip volume buttons** in Accessibility settings. If blocked for a sideloaded app, use Settings → Apps → QA Clip → ⋮ → **Allow restricted settings**, then return to Accessibility.
 - Allow microphone access and notifications when requested.
+- Choose a game and your lookback window (10 seconds suggested).
 - Tap **Start session** and approve Android's screen-sharing prompt. Choose the whole screen when Android offers a choice.
 - Open your game. Press Volume Up to start a clip, speak about the issue, and press Volume Up again to send it.
 
@@ -152,7 +157,8 @@ qa-clip/
   <Game>/                 videos and metadata
   inbox.jsonl             completed clip arrivals
   Tickets/clips.json      durable queue
-  Tickets/settings.json   provider, model and pause preference
+  games.json              shared game names (phone + Mac)
+  Tickets/settings.json   provider, model, effort and pause preference
   Tickets/<ID>/           ticket.json and screenshots
   Tickets/.work/          extracted frames, transcript, prompt, provider output
   Handoffs/               saved prompts

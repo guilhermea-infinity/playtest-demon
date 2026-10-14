@@ -166,9 +166,9 @@ class Analyst(threading.Thread):
         clip = st.inbox / rel
         meta = dict(c.get("meta") or {})
         meta.update({k: v for k, v in (_read(clip.with_suffix(".json")) or {}).items() if v not in (None, "")})
-        game = meta.get("appLabel") or meta.get("app") or "Unknown app"
+        game = meta.get("game") or meta.get("appLabel") or meta.get("app") or "Unknown app"
         work = st.work / rel.replace("/", " - ").removesuffix(".mp4")
-        st.set_clip(rel, status="working", startedAt=time.time(), step="Extracting frames", error=None, provider=provider, model=model or "CLI default")
+        st.set_clip(rel, status="working", startedAt=time.time(), step="Extracting frames", error=None, provider=provider, model=model or "CLI default", effort=config.get("effort", ""))
         self.say(f"Analysing {rel}")
         t0 = time.time()
         try:
@@ -179,7 +179,7 @@ class Analyst(threading.Thread):
             remove_tree(work)
             (work / "frames").mkdir(parents=True)
             dur, w, h = self.probe(clip)
-            pressed = float(meta.get("pressedAtSecond") or min(15.0, dur))
+            pressed = float(meta["pressedAtSecond"]) if meta.get("pressedAtSecond") is not None else min(10.0, dur)
             self.frames(clip, work)
             step = self.sheet(work, dur, pressed, w, h)
 
@@ -190,7 +190,7 @@ class Analyst(threading.Thread):
             st.set_clip(rel, step=f"{'Claude' if provider == 'claude' else 'Codex'} is analysing")
             prompt = self.prompt(meta, game, dur, w, h, pressed, step, transcript, c.get("hint"))
             (work / "prompt.md").write_text(prompt)
-            data = self.ask_provider(prompt, work, provider, model)
+            data = self.ask_provider(prompt, work, provider, model, config.get("effort", ""))
 
             st.set_clip(rel, step="Writing tickets")
             ids = self.make_tickets(data, rel, clip, meta, game, dur, w, h)
@@ -301,7 +301,7 @@ class Analyst(threading.Thread):
             tpl = tpl.replace("{{" + k + "}}", str(v))
         return tpl
 
-    def ask_provider(self, prompt, work, provider, model):
+    def ask_provider(self, prompt, work, provider, model, effort=""):
         binary = self.tools.get(provider)
         if not binary:
             raise RuntimeError(f"The {provider} command isn't installed")
@@ -316,6 +316,8 @@ class Analyst(threading.Thread):
                    "--output-schema", str(work / "schema.json"),
                    "--output-last-message", str(work / "answer.json"), "--image", str(work / "sheet.jpg")]
             prompt += "\nThe attached image is sheet.jpg. Use view_image for individual local frames. Return only ticket JSON."
+        if effort:
+            cmd += ["--effort", effort] if provider == "claude" else ["-c", f'model_reasoning_effort="{effort}"']
         if model:
             cmd += ["--model", model]
         if provider == "codex":
@@ -429,7 +431,7 @@ class Analyst(threading.Thread):
                 "shots": shots, "checks": checks, "confidence": d.get("confidence", "medium"),
                 "duplicate_of": dup if dup in st.tickets else None, "note": "",
                 "summary": data.get("clip_summary", ""),
-                "provider": st.clips[rel].get("provider"), "model": st.clips[rel].get("model"),
+                "provider": st.clips[rel].get("provider"), "model": st.clips[rel].get("model"), "effort": st.clips[rel].get("effort", ""),
             }
             st.save_ticket(t)
             ids.append(tid)

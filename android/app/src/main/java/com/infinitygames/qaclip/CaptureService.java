@@ -39,7 +39,7 @@ public final class CaptureService extends Service {
     private Recorder rec;
     private boolean ending, clipping;
     private long sessionStart, clipStart, clipWall;
-    private String clipApp;
+    private String clipApp, clipGame;
 
     boolean clipping() { return clipping; }
 
@@ -77,7 +77,7 @@ public final class CaptureService extends Service {
         }, main);
 
         int[] s = captureSize();
-        rec = new Recorder(mp, s[0], s[1], s[2], voice);
+        rec = new Recorder(mp, s[0], s[1], s[2], voice, getSharedPreferences("qaclip", 0).getInt("lookback", 10));
         try {
             rec.start();
         } catch (Exception e) {
@@ -111,6 +111,7 @@ public final class CaptureService extends Service {
         clipStart = SystemClock.elapsedRealtime();
         clipWall = System.currentTimeMillis();
         clipApp = KeyService.foregroundApp();
+        clipGame = Games.selected(this);
         final File dir = Clips.outbox(this);
         final String name = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date(clipWall));
         Feedback.buzz(this, Feedback.START);
@@ -133,7 +134,7 @@ public final class CaptureService extends Service {
         if (!clipping || r == null) return;
         clipping = false;
         main.removeCallbacks(tick);
-        final String app = clipApp;
+        final String app = clipApp, game = clipGame;
         final long wall = clipWall;
         Feedback.buzz(this, Feedback.SAVE);
         KeyService.flash("Saved", Feedback.GREEN);
@@ -144,7 +145,7 @@ public final class CaptureService extends Service {
                 main.post(() -> KeyService.flash("Clip failed", Feedback.GREY));
                 return;
             }
-            Clips.writeMeta(this, c, app, wall, r);
+            Clips.writeMeta(this, c, app, game, wall, r);
             Uploader.get(this).kick();
         });
     }
@@ -160,10 +161,10 @@ public final class CaptureService extends Service {
         work.execute(() -> r.stopClip(false));
     }
 
-    /** Clip length so far: up to 15 s of pre-roll plus the time since the press. */
+    /** Clip length so far: the configured pre-roll plus the time since the press. */
     private String label() {
         long now = SystemClock.elapsedRealtime();
-        long pre = Math.min(Recorder.PRE_US / 1000, clipStart - sessionStart);
+        long pre = Math.min(rec.lookbackUs / 1000, clipStart - sessionStart);
         long s = (pre + now - clipStart) / 1000;
         return String.format(Locale.US, "● REC %d:%02d", s / 60, s % 60);
     }
@@ -248,7 +249,7 @@ public final class CaptureService extends Service {
         return new Notification.Builder(this, "session")
                 .setSmallIcon(R.drawable.ic_note)
                 .setContentTitle(clipping ? "Recording a clip" : "QA session on")
-                .setContentText(clipping ? "Vol + to save · Vol − to throw away" : "Vol + saves the last 15 s and keeps recording")
+                .setContentText(clipping ? "Vol + to save · Vol − to throw away" : "Vol + starts a clip with your lookback")
                 .setContentIntent(open)
                 .addAction(new Notification.Action.Builder(null, "Stop session", stop).build())
                 .setOngoing(true)

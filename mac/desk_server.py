@@ -6,6 +6,9 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+from desk_games import games
+from desk_models import catalog
+
 HERE = Path(__file__).resolve().parent
 UI = HERE / "desk-ui" / "index.html"
 
@@ -47,6 +50,12 @@ def make_handler(store, port):
                 return self._send(200, UI.read_bytes(), "text/html; charset=utf-8")
             if u.path == "/app.css":
                 return self._send(200, (UI.parent / "app.css").read_bytes(), "text/css; charset=utf-8")
+            if u.path == "/api/models":
+                try:
+                    return self._json(catalog(parse_qs(u.query).get('provider', ['claude'])[0],
+                                              parse_qs(u.query).get('refresh') == ['1']))
+                except ValueError as exc:
+                    return self._json({'error': str(exc)}, 400)
             if u.path == "/api/state":
                 return self._json(store.state())
             if u.path.startswith("/media/"):
@@ -119,6 +128,11 @@ def make_handler(store, port):
             if not isinstance(body, dict):
                 return self._json({"error": "Expected a JSON object"}, 400)
             p = urlparse(self.path).path
+            if p == "/api/games":
+                try:
+                    return self._json({'games': games(store.inbox, [body.get('name')])})
+                except ValueError as exc:
+                    return self._json({'error': str(exc)}, 400)
             if p == "/api/settings":
                 try:
                     return self._json({"ok": True, "settings": store.configure(body)})

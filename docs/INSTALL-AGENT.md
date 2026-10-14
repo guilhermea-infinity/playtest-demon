@@ -84,11 +84,13 @@ Do not disable platform protections or change unrelated accessibility services.
 
 Use `--inbox /absolute/path` for a custom inbox. Open http://127.0.0.1:8800. If the port is occupied, identify the existing process before changing it. Only one desk may manage a given inbox.
 
-- Confirm Videos loads and the intended provider/model appears in settings.
+- Confirm Videos loads. Open analyst settings, refresh the installed CLI’s model list, and confirm the owner’s provider, model, and supported effort. Keep CLI default if preferred; do not silently substitute an unlisted saved model.
+- Add a harmless test game by name on either device and verify it appears on the other. Select it on the phone; desktop selection filters the workspace independently.
+- Explain Lookback: 0–30 seconds before the first press, 10 suggested to catch bugs noticed moments after they happen. Use 0 for no pre-roll. Change it before starting the session. The session must run long enough to fill the requested window.
 - Ask the owner to record a harmless 5–10 second clip: Volume Up, describe one visible change request, then Volume Up again.
 - Confirm the phone finishes sending and a card appears in Videos. New cards should continue appearing while another clip is analysed.
 - Confirm the card moves through extraction, transcription and provider analysis to Ready to review, or shows a specific actionable error.
-- Open Review. Confirm video playback, the spoken quote if audio is enabled, screenshots and editable fields.
+- Open Review. Confirm the selected game label, lookback/press timing, video playback, the spoken quote if audio is enabled, screenshots and editable fields.
 - With the owner's test ticket, verify edit → approve → Handoffs → preview/copy. Do not post a ticket to an external issue tracker.
 - If Wi-Fi is desired, disconnect USB, approve the new phone pairing dialog on the Mac, and repeat. Some office Wi-Fi blocks local discovery; USB remains a valid fallback.
 - Stop the test session on the phone. Explain how to start the next one.

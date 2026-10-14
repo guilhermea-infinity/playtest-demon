@@ -69,7 +69,7 @@ class DeskTests(unittest.TestCase):
         self.store.configure({'provider': 'codex', 'model': 'custom-model', 'paused': True})
         restarted = Store(self.root)
         self.assertEqual(restarted.next_queued(), rel)
-        self.assertEqual(restarted.config(), {'provider': 'codex', 'model': 'custom-model', 'paused': True})
+        self.assertEqual(restarted.config(), {'provider': 'codex', 'model': 'custom-model', 'paused': True, 'effort': ''})
 
     def test_review_edit_approve_reject_undo(self):
         self.ticket()
@@ -121,15 +121,17 @@ class DeskTests(unittest.TestCase):
             self.assertEqual(cmd[cmd.index('--model') + 1], 'chosen-model')
             if cmd[0] == '/bin/codex':
                 self.assertIn('read-only', cmd)
+                self.assertIn('model_reasoning_effort="high"', cmd)
                 (work / 'answer.json').write_text(json.dumps(data))
                 output = ''
             else:
                 self.assertIn('Read,Glob', cmd)
+                self.assertEqual(cmd[cmd.index('--effort') + 1], 'high')
                 output = json.dumps({'structured_output': data})
             return subprocess.CompletedProcess(cmd, 0, output, '')
         with patch.object(analyst, 'run_provider', side_effect=lambda cmd, prompt, work: execute(cmd)):
             for provider in ['claude', 'codex']:
-                self.assertEqual(analyst.ask_provider('test', work, provider, 'chosen-model'), data)
+                self.assertEqual(analyst.ask_provider('test', work, provider, 'chosen-model', 'high'), data)
         validate(data, strict_schema(SCHEMA))
 
     def test_provider_failure_does_not_create_tickets(self):

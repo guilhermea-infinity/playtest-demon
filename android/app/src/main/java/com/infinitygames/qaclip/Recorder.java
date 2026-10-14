@@ -19,12 +19,12 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 
 /**
- * Encodes the screen (and the mic) for the whole session but only keeps the last 15 s in memory.
- * startClip() opens an MP4 that begins with those 15 s and keeps growing; stopClip() closes or throws it away.
+ * Encodes the screen (and the mic) for the whole session but only keeps the configured lookback in memory.
+ * startClip() opens an MP4 that begins with that lookback and keeps growing; stopClip() closes or throws it away.
  */
 final class Recorder {
     static final String TAG = "QAClip";
-    static final long PRE_US = 15_000_000L;
+    final long lookbackUs;
     private static final int RATE = 44100;
 
     static final class Clip {
@@ -60,7 +60,8 @@ final class Recorder {
     private long t0, pressPts, lastPts;
     private File part;
 
-    Recorder(MediaProjection mp, int w, int h, int dpi, boolean voice) {
+    Recorder(MediaProjection mp, int w, int h, int dpi, boolean voice, int lookbackSeconds) {
+        this.lookbackUs = Math.max(0, Math.min(30, lookbackSeconds)) * 1_000_000L;
         this.mp = mp;
         this.w = w;
         this.h = h;
@@ -101,14 +102,14 @@ final class Recorder {
         if (input != null) input.release();
     }
 
-    /** Opens a clip on the newest key frame at least 15 s back (or as far back as the session goes). */
+    /** Opens a clip on the newest key frame at or before the lookback boundary (or as far back as the session goes). */
     boolean startClip(File dir, String name) {
         synchronized (lock) {
-            if (mux != null || vFmt == null || vRing.isEmpty()) return false;
+            if (mux != null || vFmt == null || (lookbackUs > 0 && vRing.isEmpty())) return false;
             Pkt head = null;
             for (Pkt p : vRing) if (p.key) { head = p; break; }
-            if (head == null) return false;
-            t0 = head.pts;
+            if (head == null && lookbackUs > 0) return false;
+            t0 = lookbackUs == 0 ? -1 : head.pts;
             pressPts = lastPts;
             part = new File(dir, name + ".mp4.part");
             try {
@@ -122,6 +123,13 @@ final class Recorder {
                 mux = null;
                 part.delete();
                 return false;
+            }
+            if (lookbackUs == 0) {
+                // Wait for a fresh sync frame; never include pre-press frames at zero.
+                android.os.Bundle params = new android.os.Bundle();
+                params.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0);
+                try { venc.setParameters(params); } catch (IllegalStateException ignored) { }
+                return true;
             }
             // the pre-roll: everything held, both tracks merged in time order
             ArrayList<Pkt> vs = new ArrayList<>(vRing), as = new ArrayList<>(aRing);
@@ -145,7 +153,7 @@ final class Recorder {
             m = mux;
             mux = null;
             f = part;
-            c.preUs = pressPts - t0;
+            c.preUs = Math.max(0, pressPts - t0);
             c.durUs = lastPts - t0;
             c.audio = aTrack >= 0;
             vTrack = aTrack = -1;
@@ -278,12 +286,17 @@ final class Recorder {
             if (video) {
                 vRing.addLast(p);
                 lastPts = p.pts;
-                trimVideo(p.pts - PRE_US);
+                if (lookbackUs == 0) vRing.clear();
+                else trimVideo(p.pts - lookbackUs);
             } else {
                 aRing.addLast(p);
-                while (aRing.size() > 1 && aRing.peekFirst().pts < p.pts - PRE_US - 2_000_000L) aRing.pollFirst();
+                while (aRing.size() > 1 && aRing.peekFirst().pts < p.pts - lookbackUs - 2_000_000L) aRing.pollFirst();
             }
-            if (mux != null) write(video, p);
+            if (lookbackUs == 0) aRing.clear();
+            if (mux != null) {
+                if (t0 < 0 && video && p.key) { t0 = p.pts; pressPts = p.pts; }
+                if (t0 >= 0) write(video, p);
+            }
         }
     }
 
