@@ -1889,3 +1889,20 @@ dd {
 .repo-advanced summary {color:var(--green); cursor:pointer; font-weight:600}
 #repoProgress {margin-top:12px}
 @media(max-width:620px){.repo-source-row{flex-direction:column}.repo-source-row .btn{width:100%}.repo-connection-facts{grid-template-columns:minmax(0,1fr)}.repo-connection-facts div:last-child{grid-column:auto}}
+
+#runDialog {max-width:840px}
+.agent-notes {margin:20px 0}
+.agent-notes pre,.agent-question p {white-space:pre-wrap;overflow-wrap:anywhere}
+.run-review-callout {padding:16px;border-left:3px solid var(--green);background:#86ded40b;line-height:1.8}
+#runReview {margin:24px 0;padding-top:24px;border-top:1px solid var(--line)}
+#runQuestions {display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}
+#runQuestions .selected {border-color:var(--green);color:var(--green);background:#86ded41a}
+#runQuestionBody {padding:20px;border:1px solid var(--line);border-radius:12px;margin-bottom:20px;min-width:0}
+.run-question-heading {display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+.run-question-heading span:last-child {display:flex;gap:12px}
+.agent-question {background:#86ded40b;padding:16px;border-radius:8px;margin:16px 0}
+.agent-question small {color:var(--green);letter-spacing:1px;font-size:10px}
+#runQuestionBody video {display:block;width:100%;max-height:340px;margin-top:15px}
+.run-review-buttons {display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+#runReview textarea {width:100%;box-sizing:border-box;resize:vertical;min-height:85px}
+@media(max-width:620px){#runQuestionBody{padding:14px}.run-review-buttons .btn{flex:1;min-width:180px}}

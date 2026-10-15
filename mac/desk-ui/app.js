@@ -124,15 +124,17 @@ function render() {
   $("#handoffCount").textContent = na;
   $("#runCount").textContent = (S.runs || []).filter(
     (r) =>
-      [
+      ([
         "queued",
         "preparing",
+        "continuing",
+        "needs_review",
         "fixing",
         "testing",
         "publishing",
         "pr_ready",
         "merge_queued",
-      ].includes(r.status) &&
+      ].includes(r.status) || canReviewRun(r)) &&
       (!selectedGame || r.game === selectedGame),
   ).length;
   $("#repoShortcut").textContent =
@@ -798,6 +800,8 @@ function renderSide() {
             [
               "queued",
               "preparing",
+              "continuing",
+              "needs_review",
               "fixing",
               "testing",
               "publishing",
@@ -807,7 +811,8 @@ function renderSide() {
               "interrupted",
             ].includes(r.status),
         );
-        return `<article class="tray"><div class="batch-heading"><div><div class="eyebrow">APPROVED BATCH</div><h2>${esc(tr.game)}</h2><p>${tr.ids.length} human-approved request${tr.ids.length === 1 ? "" : "s"}</p></div><span class="badge done">Ready</span></div>${tr.tickets.map((t) => `<div class="trow"><span class="id">${esc(t.id)}</span><b>${esc(t.title)}</b><button class="text-button" onclick="backToReview('${t.id}')">Edit / unapprove</button></div>`).join("")}<div class="repo-summary"><div><span class="eyebrow">FIXING AGENT</span><b>${repo ? esc(repo.github) : "No repository connected yet"}</b><p>${repo ? esc(repo.provider + " · " + (repo.model || "CLI default") + " · " + repo.base) + (repo.autoMerge ? " · auto merge enabled" : " · PR for review") : "Connect once. Every batch runs in its own branch."}</p></div><button class="btn compact" data-game="${esc(tr.game)}" onclick="connectRepo(this.dataset.game)">${repo ? "Configure" : "Connect repository"}</button></div><div class="batch-actions"><button class="btn" onclick="copyTray(${i})">Copy prompt</button><button class="btn go" ${!repo || inFlight || batchBusy ? "disabled" : ""} onclick="sendBatch(${i})">${batchBusy ? "Starting…" : "Send batch to agent ↗"}</button></div>${inFlight ? '<p class="hint">Finish the active run or its PR before sending another batch to this repository. <button class="text-button" onclick="go(\'runs\')">View fix runs →</button></p>' : ""}<details><summary>What the agent receives</summary><pre>${esc(tr.prompt)}</pre></details></article>`;
+        const saved = (S.runs || []).slice().reverse().find((r) => canReviewRun(r) && r.repository?.github === repo?.github && r.tickets.every((id) => tr.ids.includes(id)));
+        return `<article class="tray">${saved ? `<div class="run-review-callout"><b>You already have saved agent work for this batch.</b><p>${saved.result.addressed.length} implemented · ${saved.result.unaddressed.length} questions. Continue the existing branch instead of starting over.</p><button class="btn go compact" onclick="go('runs');openRun('${saved.id}')">Review agent notes →</button></div>` : ""}<div class="batch-heading"><div><div class="eyebrow">APPROVED BATCH</div><h2>${esc(tr.game)}</h2><p>${tr.ids.length} human-approved request${tr.ids.length === 1 ? "" : "s"}</p></div><span class="badge done">Ready</span></div>${tr.tickets.map((t) => `<div class="trow"><span class="id">${esc(t.id)}</span><b>${esc(t.title)}</b><button class="text-button" onclick="backToReview('${t.id}')">Edit / unapprove</button></div>`).join("")}<div class="repo-summary"><div><span class="eyebrow">FIXING AGENT</span><b>${repo ? esc(repo.github) : "No repository connected yet"}</b><p>${repo ? esc(repo.provider + " · " + (repo.model || "CLI default") + " · " + repo.base) + (repo.autoMerge ? " · auto merge enabled" : " · PR for review") : "Connect once. Every batch runs in its own branch."}</p></div><button class="btn compact" data-game="${esc(tr.game)}" onclick="connectRepo(this.dataset.game)">${repo ? "Configure" : "Connect repository"}</button></div><div class="batch-actions"><button class="btn" onclick="copyTray(${i})">Copy prompt</button><button class="btn go" ${!repo || inFlight || batchBusy ? "disabled" : ""} onclick="sendBatch(${i})">${batchBusy ? "Starting…" : "Send batch to agent ↗"}</button></div>${inFlight ? '<p class="hint">Finish the active run or its PR before sending another batch to this repository. <button class="text-button" onclick="go(\'runs\')">View fix runs →</button></p>' : ""}<details><summary>What the agent receives</summary><pre>${esc(tr.prompt)}</pre></details></article>`;
       })
       .join("") ||
     '<div class="empty"><div class="empty-icon">✓</div><h2>Approval comes first.</h2><p>Review each request and approve the ones you want the agent to build. They collect here by game.</p><button class="btn go" onclick="go(\'review\')">Review requests →</button></div>';
@@ -1357,6 +1362,8 @@ const runLabels = {
   testing: "Verifying changes",
   publishing: "Publishing PR",
   recovering: "Recovering publication",
+  continuing: "Continuing saved work",
+  needs_review: "Your answers needed",
   pr_ready: "PR ready for review",
   merge_queued: "Merge queued on GitHub",
   merged: "Merged · playtest again",
@@ -1374,19 +1381,21 @@ function runSteps(r) {
       "pr_ready",
       "merged",
     ],
-    index = order.indexOf(r.status === "merge_queued" ? "pr_ready" : r.status);
+    index = order.indexOf(canReviewRun(r) || r.status === "continuing" ? "fixing" : r.status === "merge_queued" ? "pr_ready" : r.status);
   return `<div class="run-steps">${["Branch", "Implement", "Verify", "PR", "Review / merge", "Playtest"].map((s, i) => `<span class="${i < index ? "complete" : i === index ? "current" : ""}">${i < index ? "✓" : i + 1} ${s}</span>`).join("")}</div>`;
 }
 function runActions(r) {
   const editable = [
     "queued",
     "preparing",
+    "continuing",
+    "needs_review",
     "fixing",
     "testing",
     "failed",
     "interrupted",
   ].includes(r.status);
-  return `<div class="run-actions"><button class="btn compact" onclick="openRun('${r.id}')">Details & log</button>${r.pr ? `<a class="btn compact" target="_blank" rel="noopener" href="${esc(r.pr)}">Open PR ↗</a><button class="text-button" onclick="runAction('${r.id}','refresh')">Refresh GitHub</button>` : ""}${["pr_ready", "merge_queued"].includes(r.status) && r.repository.autoMerge && !r.autoMergeDisabled ? `<button class="text-button" onclick="runAction('${r.id}','disable_merge')">Stop auto merge</button>` : ""}${r.status === "pr_ready" && !r.autoMergeDisabled ? `<button class="btn go compact" onclick="mergeRun('${r.id}')">Queue merge</button>` : ""}${editable ? `<button class="text-button danger-text" onclick="cancelRun('${r.id}')">${["failed", "interrupted"].includes(r.status) ? "Return tickets to batch" : "Cancel run"}</button>` : ""}${["failed", "interrupted"].includes(r.status) && r.testsPassed ? `<button class="btn compact" onclick="runAction('${r.id}','recover')">Recover publication</button>` : ""}</div>`;
+  return `<div class="run-actions">${canReviewRun(r) ? `<button class="btn go compact" onclick="openRun('${r.id}')">Review agent notes · ${r.result.unaddressed.length} →</button>` : ""}<button class="btn compact" onclick="openRun('${r.id}')">Details & log</button>${r.pr ? `<a class="btn compact" target="_blank" rel="noopener" href="${esc(r.pr)}">Open PR ↗</a><button class="text-button" onclick="runAction('${r.id}','refresh')">Refresh GitHub</button>` : ""}${["pr_ready", "merge_queued"].includes(r.status) && r.repository.autoMerge && !r.autoMergeDisabled ? `<button class="text-button" onclick="runAction('${r.id}','disable_merge')">Stop auto merge</button>` : ""}${r.status === "pr_ready" && !r.autoMergeDisabled ? `<button class="btn go compact" onclick="mergeRun('${r.id}')">Queue merge</button>` : ""}${editable ? `<button class="text-button danger-text" onclick="cancelRun('${r.id}')">${["failed", "interrupted", "needs_review"].includes(r.status) ? "Return tickets to batch" : "Cancel run"}</button>` : ""}${["failed", "interrupted"].includes(r.status) && r.testsPassed ? `<button class="btn compact" onclick="runAction('${r.id}','recover')">Recover publication</button>` : ""}</div>`;
 }
 function renderRuns() {
   const runs = (S.runs || [])
@@ -1403,7 +1412,7 @@ function renderRuns() {
     runs
       .map(
         (r) =>
-          `<article class="run-card"><div class="batch-heading"><div><div class="eyebrow">${esc(r.repository.github)} · ${r.tickets.length} REQUESTS</div><h2>${esc(r.game)}</h2><p>${esc(r.repository.provider)} · ${esc(r.repository.model || "CLI default")} · <span data-run-clock="${r.id}">${r.startedAt ? mmss((r.completedAt || Date.now() / 1000) - r.startedAt) + " elapsed" : age((Date.now() - new Date(r.created)) / 1000)}</span></p></div><span class="badge ${["failed", "interrupted"].includes(r.status) ? "failed" : r.status === "merged" ? "done" : "working"}">${esc(runLabels[r.status] || r.status)}</span></div>${runSteps(r)}<p class="run-summary">${esc(r.result?.summary || "The agent works only on the approved requests in this batch.")}</p><div class="ticket-tags">${r.tickets.map((id) => `<span>${esc(id)}</span>`).join("")}</div>${r.error ? `<div class="error-box">${esc(r.error)}</div>` : ""}${r.mergeError || r.githubError ? `<p class="fail">${esc(r.mergeError || r.githubError)}</p>` : ""}${runActions(r)}</article>`,
+          `<article class="run-card"><div class="batch-heading"><div><div class="eyebrow">${esc(r.repository.github)} · ${r.tickets.length} REQUESTS</div><h2>${esc(r.game)}</h2><p>${esc(r.repository.provider)} · ${esc(r.repository.model || "CLI default")} · <span data-run-clock="${r.id}">${r.startedAt ? mmss((r.completedAt || Date.now() / 1000) - r.startedAt) + " elapsed" : age((Date.now() - new Date(r.created)) / 1000)}</span></p></div><span class="badge ${["failed", "interrupted"].includes(r.status) ? "failed" : r.status === "merged" ? "done" : "working"}">${esc(canReviewRun(r) ? "Your answers needed · work saved" : runLabels[r.status] || r.status)}</span></div>${runSteps(r)}<p class="run-summary">${esc(r.result?.summary || "The agent works only on the approved requests in this batch.")}</p>${canReviewRun(r) ? `<p class="run-review-callout"><b>${r.result.addressed.length} implemented · ${r.result.unaddressed.length} need your decisions</b><br>Saved changes are kept. Answer the agent here and continue this branch.</p>` : ""}<div class="ticket-tags">${r.tickets.map((id) => `<span>${esc(id)}</span>`).join("")}</div>${r.error ? `<div class="error-box">${esc(r.error)}</div>` : ""}${r.mergeError || r.githubError ? `<p class="fail">${esc(r.mergeError || r.githubError)}</p>` : ""}${runActions(r)}</article>`,
       )
       .join("") +
     (runs.length
@@ -1412,7 +1421,7 @@ function renderRuns() {
   if ($("#runDialog").open) renderRunDetail();
 }
 async function openRun(id) {
-  runOpen = id;
+  runOpen = id; runReviewKey = null;
   $("#runDialog").showModal();
   renderRunDetail();
   await loadRunLog();
@@ -1423,7 +1432,73 @@ function renderRunDetail() {
   $("#runTitle").textContent =
     r.game + " · " + (runLabels[r.status] || r.status);
   $("#runDetail").innerHTML =
-    `${runSteps(r)}<p>${esc(r.result?.summary || "Working from your approved batch.")}</p><dl><dt>Branch</dt><dd>${esc(r.branch)}</dd><dt>Check command</dt><dd>${esc(r.repository.testCommand)}</dd><dt>Saved run folder</dt><dd>${esc("AgentRuns/" + r.id)} in your inbox</dd></dl>${r.result?.notes ? `<p>${esc(r.result.notes)}</p>` : ""}${r.diff ? `<pre>${esc(r.diff)}</pre>` : ""}${r.error ? `<p class="fail">${esc(r.error)}</p>` : ""}`;
+    `${runSteps(r)}<p>${esc(r.result?.summary || "Working from your approved batch.")}</p><dl><dt>Branch</dt><dd>${esc(r.branch)}</dd><dt>Check command</dt><dd>${esc(r.repository.testCommand)}</dd><dt>Saved run folder</dt><dd>${esc("AgentRuns/" + r.id)} in your inbox</dd></dl>${r.result?.notes ? `<details class="agent-notes"><summary>All agent notes · ${r.result.addressed.length} implemented, ${r.result.unaddressed.length} pending</summary><pre>${esc(r.result.notes)}</pre></details>` : ""}${r.diff ? `<pre>${esc(r.diff)}</pre>` : ""}${r.error ? `<p class="fail">${esc(r.error)}</p>` : ""}`;
+  renderRunReview(r);
+}
+let runReviewKey = null, runReviewDraft = null, runReviewIndex = 0, runReviewBusy = false;
+function canReviewRun(r) {
+  return ["needs_review", "failed", "interrupted", "cancelled"].includes(r.status) && r.result?.unaddressed?.length && !r.headSha && !r.pr;
+}
+function runReviewStorage(r) { return "qa-run-review-" + r.id; }
+function renderRunReview(r) {
+  const section = $("#runReview");
+  section.hidden = !canReviewRun(r);
+  if (section.hidden) return;
+  const key = r.id + JSON.stringify(r.result);
+  if (runReviewKey === key) return; // Polling must never replace a typed answer or its selection.
+  runReviewKey = key; runReviewIndex = 0; runReviewBusy = false;
+  let local;
+  try { local = JSON.parse(localStorage.getItem(runReviewStorage(r))); } catch {}
+  runReviewDraft = {answers: {...(local?.answers || r.review?.answers || {})}, note: local?.note ?? r.review?.note ?? ""};
+  section.innerHTML = `<div class="eyebrow">KEEP THE WORK. ANSWER THE QUESTIONS.</div><h3>Review agent notes</h3><p>${r.result.addressed.length} requests implemented. ${r.result.unaddressed.length} need your decisions. Continuing keeps this run’s saved changes, evidence and branch.</p><nav id="runQuestions" aria-label="Agent questions"></nav><div id="runQuestionBody"></div><label for="runReviewExtra">Anything else for the agent? <span class="hint">Optional</span></label><textarea id="runReviewExtra" rows="2" maxlength="8000" oninput="editRunReview()" placeholder="Feedback on the implemented changes or overall approach…">${esc(runReviewDraft.note)}</textarea><p id="runReviewStatus" class="hint" role="status">${r.review?.savedAt ? "Previously saved answers loaded. You can edit them." : "Draft answers stay on this Mac as you type. Save answers to keep them with this run."}</p><p id="runReviewError" class="fail" role="alert"></p><div class="run-review-buttons"><button class="btn" id="runReviewSave" onclick="saveRunReview(false)">Save answers</button><button class="btn go" id="runReviewContinue" onclick="saveRunReview(true)">Continue saved work →</button></div><p class="hint">Continue starts ${esc(r.repository.provider)} · ${esc(r.repository.model || "CLI default")} on the existing branch. Project checks must pass before a PR can be published. Saving answers does not start an agent.</p>`;
+  renderRunQuestion(r);
+}
+function runQuestionNote(r, id) {
+  const blocks = (r.result.notes || "").split(/(?=^[A-Z0-9]+-\d+\s*[—–:−-])/m);
+  return blocks.filter((b) => b.trim().startsWith(id + " ") || b.trim().startsWith(id + ":")).join("\n").trim() || r.result.notes || "The agent needs clarification for this request.";
+}
+function renderRunQuestion(r) {
+  const pending = r.result.unaddressed, id = pending[runReviewIndex];
+  const t = r.snapshot.find((t) => t.id === id) || {id, title:id};
+  $("#runQuestions").innerHTML = pending.map((tid, i) => `<button class="btn compact ${i === runReviewIndex ? "selected" : ""}" aria-current="${i === runReviewIndex ? "step" : "false"}" onclick="selectRunQuestion(${i})">${runReviewDraft.answers[tid]?.trim() ? "✓ " : ""}${esc(tid)}</button>`).join("");
+  $("#runQuestionBody").innerHTML = `<div class="run-question-heading"><span class="eyebrow">QUESTION ${runReviewIndex + 1} OF ${pending.length}</span><span><button class="text-button" data-boundary="${runReviewIndex === 0}" ${runReviewIndex === 0 ? "disabled" : ""} onclick="selectRunQuestion(${runReviewIndex - 1})">← Previous</button><button class="text-button" data-boundary="${runReviewIndex === pending.length - 1}" ${runReviewIndex === pending.length - 1 ? "disabled" : ""} onclick="selectRunQuestion(${runReviewIndex + 1})">Next →</button></span></div><h3>${esc(t.title)}</h3><div class="agent-question"><small>AGENT NEEDS TO KNOW</small><p>${esc(runQuestionNote(r,id))}</p></div><details><summary>Original approved request & recording</summary><p>${esc(t.want)}</p><p><b>Done when:</b> ${esc(t.done_when)}</p>${t.clip ? `<video src="${media(t.clip)}" controls playsinline preload="none"></video>` : ""}</details><label for="runReviewAnswer">Your answer for ${esc(id)}</label><textarea id="runReviewAnswer" rows="4" maxlength="4000" oninput="editRunReview()" placeholder="Give the missing decision so the agent can finish this request…">${esc(runReviewDraft.answers[id] || "")}</textarea>`;
+  runReviewActions(r);
+}
+function selectRunQuestion(index) {
+  const r = S.runs.find((r) => r.id === runOpen);
+  if (!r || runReviewBusy || index < 0 || index >= r.result.unaddressed.length) return;
+  editRunReview(); runReviewIndex = index; renderRunQuestion(r); $("#runReviewAnswer").focus();
+}
+function editRunReview() {
+  const r = S.runs.find((r) => r.id === runOpen);
+  if (!r || !runReviewDraft) return;
+  runReviewDraft.answers[r.result.unaddressed[runReviewIndex]] = $("#runReviewAnswer").value;
+  runReviewDraft.note = $("#runReviewExtra").value;
+  try { localStorage.setItem(runReviewStorage(r), JSON.stringify(runReviewDraft)); $("#runReviewStatus").textContent = "Draft kept on this Mac. Save answers to keep them with the run."; }
+  catch { $("#runReviewStatus").textContent = "Browser draft storage unavailable. Use Save answers before closing."; }
+  runReviewActions(r);
+}
+function runReviewActions(r) {
+  $("#runReviewSave").disabled = runReviewBusy;
+  $("#runReviewContinue").disabled = runReviewBusy || r.result.unaddressed.some((id) => !runReviewDraft.answers[id]?.trim());
+  $("#runReviewContinue").textContent = runReviewBusy ? "Saving…" : "Continue saved work →";
+  for (const el of $("#runReview").querySelectorAll("textarea, #runQuestions button, #runQuestionBody button")) el.disabled = runReviewBusy || el.dataset.boundary === "true";
+}
+async function saveRunReview(continueWork) {
+  const r = S.runs.find((r) => r.id === runOpen);
+  if (!r || runReviewBusy) return;
+  editRunReview();
+  const body = {answers:Object.fromEntries(r.result.unaddressed.map((id) => [id, runReviewDraft.answers[id] || ""])),note:runReviewDraft.note};
+  if (continueWork && Object.values(body.answers).some((v) => !v.trim())) return;
+  runReviewBusy = true; runReviewActions(r); $("#runReviewError").textContent = "";
+  try {
+    await api(`/api/run/${r.id}/${continueWork ? "continue" : "review"}`, body);
+    try { localStorage.removeItem(runReviewStorage(r)); } catch {}
+    await poll();
+    if (continueWork) { toast("Continuing the saved branch. Existing work is kept."); }
+    else $("#runReviewStatus").textContent = "Answers saved with this run. The agent has not started.";
+  } catch (e) { $("#runReviewError").textContent = e.message; }
+  finally { runReviewBusy = false; if (!$("#runReview").hidden) runReviewActions(r); }
 }
 async function loadRunLog() {
   if (!$("#runDialog").open || !runOpen) return;
@@ -1448,7 +1523,7 @@ async function runAction(id, action) {
 function cancelRun(id) {
   askAction(
     "Return this batch to approval?",
-    "The agent will stop. Saved changes and logs stay in your inbox. Requests return to the approved batch. Published PRs must be finished on GitHub first.",
+    "Use Review agent notes to answer questions and continue the saved branch. Returning tickets releases this batch so you can start fresh; saved files and logs remain in your inbox. Published PRs must be finished on GitHub first.",
     "Stop & return tickets",
     () => runAction(id, "cancel"),
   );

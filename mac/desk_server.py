@@ -22,7 +22,7 @@ def make_handler(store, port):
     origins = {f"http://{h}" for h in hosts}
 
     class H(BaseHTTPRequestHandler):
-        server_version = "PlaytestDemon/0.6.2"
+        server_version = "PlaytestDemon/0.6.3"
 
         def log_message(self, *a):
             pass
@@ -77,7 +77,7 @@ def make_handler(store, port):
                     f.seek(max(0, log.stat().st_size - 16000))
                     return self._json({"text": f.read().decode("utf-8", "replace")})
             if u.path == "/api/health":
-                return self._json({"app": "playtest-demon", "version": "0.6.2", "inbox": str(store.inbox.resolve())})
+                return self._json({"app": "playtest-demon", "version": "0.6.3", "inbox": str(store.inbox.resolve())})
             if u.path == "/api/state":
                 return self._json(store.state())
             if u.path.startswith("/media/"):
@@ -179,6 +179,11 @@ def make_handler(store, port):
                         raise ValueError("Restart the desk to enable fix runs")
                     result = runner.configure(str(body.get("game", "")), body) if p == "/api/repository" else runner.submit(str(body.get("game", "")), body.get("ids", []))
                     return self._json({"ok": True, "result": result})
+                m = re.fullmatch(r"/api/run/(RUN-\d+)/(review|continue)", p)
+                if m:
+                    rid, action = m.groups()
+                    result = store.runner.review(rid, body) if action == 'review' else store.runner.continue_run(rid, body)
+                    return self._json({'ok': True, 'result': result})
                 m = re.fullmatch(r"/api/run/(RUN-\d+)/(cancel|refresh|merge|recover|disable_merge)", p)
                 if m:
                     result = getattr(store.runner, m.group(2))(m.group(1))

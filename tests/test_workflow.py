@@ -30,7 +30,7 @@ class WorkflowTests(unittest.TestCase):
     def ticket(self, tid='GA-001', status='approved', title='Reward should become disabled'):
         t = {'id': tid, 'game': 'Game', 'clip': 'Game/clip.mp4', 'title': title, 'status': status,
              'kind': 'bug', 'priority': 'normal', 'where': 'Reward button', 'now': 'Always enabled', 'want': 'Disable after use',
-             'done_when': 'Second click is disabled', 'shots': [], 'steps': [], 'moment': {}, 'order': 1}
+             'done_when': 'Second click is disabled', 'shots': [], 'steps': [], 'moment': {}, 'order': 1, 'approvedAt': 'earlier approval'}
         self.store.save_ticket(t); return t
 
     def test_duplicate_evidence_is_reversible_and_scoped(self):
@@ -137,6 +137,69 @@ class WorkflowTests(unittest.TestCase):
         r,calls=self.full_run(existing=True)
         self.assertEqual(r['status'],'pr_ready',r.get('error'))
         self.assertFalse([c for c in calls if c[1:3]==['pr','create']])
+
+    def clarification_run(self):
+        source,remote=self.prepare_remote()
+        self.ticket('GA-002',title='Choose reward price')
+        r=self.runner.submit('Game',['GA-001','GA-002'])
+        real_execute=self.runner.execute
+        def execute(rid,args,cwd,**kw):
+            if args[0]=='git' and 'clone' in args:args=[*args[:-2],str(remote),args[-1]]
+            return real_execute(rid,args,cwd,**kw)
+        def agent(rid,clone,prompt,config):
+            (clone/'game.py').write_text('def reward():\n    return 3\n')
+            write_json(clone/'.playtest-result.json',{'summary':'One fixed; one decision needed','addressed':['GA-001'],'unaddressed':['GA-002'],'notes':'GA-002 — What price should the reward use?'})
+        with patch.object(self.runner,'execute',side_effect=execute),patch.object(self.runner,'agent',side_effect=agent):
+            self.runner.perform(r)
+        return self.runner.items()[0]
+
+    def test_agent_questions_are_reviewable_and_continue_the_same_saved_clone(self):
+        r=self.clarification_run();rid=r['id'];clone=self.runner.root/rid/'repo'
+        self.assertEqual(r['status'],'needs_review')
+        before=(clone/'game.py').read_bytes()
+        self.runner.review(rid,{'answers':{'GA-002':'Use 50 coins'},'note':'Keep the existing reward fix.'})
+        self.assertEqual(self.runner.items()[0]['status'],'needs_review')
+        self.assertEqual((clone/'game.py').read_bytes(),before)
+        restarted=Runs(self.store,threading.Event())
+        self.assertEqual(restarted.items()[0]['review']['answers']['GA-002'],'Use 50 coins')
+        resumed=restarted.continue_run(rid,{'answers':{'GA-002':'Use 50 coins'},'note':'Keep the existing reward fix.'})
+        self.assertEqual(resumed['id'],rid);self.assertEqual(resumed['branch'],r['branch'])
+        self.assertEqual(len(restarted.items()),1)
+        self.assertEqual(restarted.continue_run(rid,{'answers':{'GA-002':'Use 50 coins'}})['id'],rid)
+        def agent(rid,folder,prompt,config):
+            self.assertEqual(folder,clone);self.assertEqual((folder/'game.py').read_bytes(),before)
+            self.assertIn('Use 50 coins',prompt);self.assertIn('Keep the existing reward fix.',prompt)
+            write_json(folder/'.playtest-result.json',{'summary':'Both fixed','addressed':['GA-001','GA-002'],'unaddressed':[],'notes':'All requests checked'})
+        with patch.object(restarted,'agent',side_effect=agent),patch.object(restarted,'publish') as publish,patch.object(restarted,'execute',wraps=restarted.execute) as execute:
+            restarted.perform(resumed)
+        self.assertEqual(publish.call_count,1)
+        self.assertFalse(any('clone' in call.args[1] for call in execute.call_args_list))
+        self.assertTrue(restarted.items()[0]['testsPassed'])
+        self.assertEqual(len(restarted.items()[0]['reviewHistory']),1)
+
+    def test_cancelled_notes_can_be_reviewed_without_restarting_or_reserving_until_continue(self):
+        r=self.clarification_run();rid=r['id'];self.runner.cancel(rid)
+        self.runner.review(rid,{'answers':{'GA-002':'50 coins'}})
+        self.store.tickets['GA-001'].update(approvedAt='later reapproval',order=999)
+        self.store.save_ticket(self.store.tickets['GA-001'])
+        self.assertEqual(self.store.tickets['GA-001']['status'],'approved')
+        self.assertEqual(self.runner.items()[0]['status'],'cancelled')
+        self.runner.continue_run(rid,{'answers':{'GA-002':'50 coins'}})
+        self.assertEqual(self.store.tickets['GA-001']['runId'],rid)
+        self.assertEqual(self.store.tickets['GA-002']['status'],'fixing')
+
+    def test_continue_refuses_missing_answers_modified_approvals_and_changed_history(self):
+        r=self.clarification_run();rid=r['id'];clone=self.runner.root/rid/'repo'
+        with self.assertRaises(ValueError):self.runner.continue_run(rid,{'answers':{}})
+        self.runner.cancel(rid)
+        self.store.update_ticket('GA-001',{'want':'Different approved request'})
+        with self.assertRaises(ValueError):self.runner.continue_run(rid,{'answers':{'GA-002':'50 coins'}})
+        original=next(t for t in r['snapshot'] if t['id']=='GA-001')
+        self.store.save_ticket({**original,'status':'approved'})
+        command(['git','checkout','-b','different'],clone)
+        with self.assertRaises(ValueError):self.runner.continue_run(rid,{'answers':{'GA-002':'50 coins'}})
+        self.assertEqual(self.store.tickets['GA-001']['status'],'approved')
+        self.assertEqual(self.runner.items()[0]['status'],'cancelled')
 
     def test_merge_requires_original_head_and_required_checks(self):
         r=self.runner.submit('Game',['GA-001']); self.runner.update(r['id'],status='pr_ready',pr='https://github.com/test/game/pull/1',headSha='original')
