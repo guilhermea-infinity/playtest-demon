@@ -21,7 +21,7 @@ def make_handler(store, port):
     origins = {f"http://{h}" for h in hosts}
 
     class H(BaseHTTPRequestHandler):
-        server_version = "PlaytestDemon/0.5.0"
+        server_version = "PlaytestDemon/0.6.0"
 
         def log_message(self, *a):
             pass
@@ -51,6 +51,10 @@ def make_handler(store, port):
             u = urlparse(self.path)
             if u.path in ("/", "/index.html"):
                 return self._send(200, UI.read_bytes(), "text/html; charset=utf-8")
+            if u.path in ("/playtest", "/playtest.js", "/playtest.css"):
+                name = 'playtest.html' if u.path == '/playtest' else u.path[1:]
+                mime = 'text/html' if name.endswith('.html') else 'text/javascript' if name.endswith('.js') else 'text/css'
+                return self._send(200, (UI.parent / name).read_bytes(), mime + '; charset=utf-8')
             if u.path == "/devil.svg":
                 return self._send(200, (UI.parent / "devil.svg").read_bytes(), "image/svg+xml")
             if u.path == "/app.css":
@@ -72,7 +76,7 @@ def make_handler(store, port):
                     f.seek(max(0, log.stat().st_size - 16000))
                     return self._json({"text": f.read().decode("utf-8", "replace")})
             if u.path == "/api/health":
-                return self._json({"app": "playtest-demon", "version": "0.5.0", "inbox": str(store.inbox.resolve())})
+                return self._json({"app": "playtest-demon", "version": "0.6.0", "inbox": str(store.inbox.resolve())})
             if u.path == "/api/state":
                 return self._json(store.state())
             if u.path.startswith("/media/"):
@@ -137,8 +141,14 @@ def make_handler(store, port):
                 return self._send(403, "{}")
             if urlparse(self.path).path == "/api/import":
                 try:
+                    capture = None
+                    if self.headers.get('X-Platform') == 'Browser':
+                        raw = self.headers.get('X-Capture', '')
+                        if len(raw) > 16000:
+                            raise ValueError('Browser timing is too large')
+                        capture = json.loads(unquote(raw))
                     result = import_recording(store, self.rfile, int(self.headers.get("Content-Length", "0")),
-                                              unquote(self.headers.get("X-Game", "")), unquote(self.headers.get("X-Filename", "")), self.headers.get("X-Platform", "iOS"))
+                                              unquote(self.headers.get("X-Game", "")), unquote(self.headers.get("X-Filename", "")), self.headers.get("X-Platform", "iOS"), capture)
                     return self._json(result)
                 except (ValueError, OSError, TimeoutError, subprocess.TimeoutExpired) as exc:
                     return self._json({"error": str(exc)}, 400)

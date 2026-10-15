@@ -11,4 +11,5 @@ for (const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))
 new vm.Script(
   fs.readFileSync(path.join(__dirname, "../mac/desk-ui/app.js"), "utf8"),
 );
+new vm.Script(fs.readFileSync(path.join(__dirname, "../mac/desk-ui/playtest.js"), "utf8"));
 console.log("UI JavaScript syntax OK");

@@ -1,0 +1,53 @@
+.capture-header {position:static; height:auto; padding:24px 4vw; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:20px; align-items:center; background:var(--bg)}
+.capture-main {max-width:1120px; padding:45px 28px 20px; margin:auto}
+.capture-main h1 {margin:10px 0 14px; font-size:clamp(30px,4vw,48px)}
+.capture-intro {max-width:720px; font-size:16px; margin-bottom:30px}
+.capture-layout {display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:24px; align-items:start}
+.capture-card {min-width:0; border:1px solid var(--line); border-radius:18px; background:linear-gradient(145deg,#1a2c37,var(--panel)); padding:28px}
+.capture-card label {display:block; margin:24px 0 8px; font-weight:650}
+.capture-card label span {display:block; font-weight:400; color:var(--dim); font-size:12px; margin-top:4px}
+.capture-card input:not([type=checkbox]):not([type=range]) {width:100%; padding:13px; min-width:0}
+.link-row {display:flex; gap:8px; align-items:center}
+.link-row button {flex:none}
+.capture-card .mic-option {display:flex; align-items:center; flex-wrap:wrap; gap:8px}
+.mic-option input {accent-color:var(--green); width:18px; height:18px}
+.mic-option span {flex-basis:100%; margin-left:26px}
+.lookback-heading {display:flex; align-items:baseline; justify-content:space-between; gap:12px}
+.lookback-heading output {color:var(--green); font-size:12px}
+#lookback {width:100%; accent-color:var(--green); margin:10px 0 14px}
+.start-session {width:100%; margin:24px 0 12px}
+.session-guide ol {padding:0; margin:25px 0 30px; counter-reset:step; list-style:none}
+.session-guide li {position:relative; padding-left:42px; margin:0 0 26px; counter-increment:step}
+.session-guide li::before {content:counter(step); position:absolute; left:0; top:0; border:1px solid #45716f; color:var(--green); border-radius:50%; width:27px; height:27px; display:grid; place-content:center}
+.session-guide li p {margin-top:5px; font-size:13px}
+.capture-note {padding:18px; border-radius:12px; background:#c5a5ff0b; border:1px solid #c5a5ff33}
+.capture-note b {color:var(--purple)}
+.capture-note p {font-size:13px; margin-top:6px}
+.capture-notice {border:1px solid #edc57c66; border-radius:12px; background:#edc57c0b; padding:16px 20px; margin:18px 0; line-height:1.6}
+.capture-notice.error {border-color:#f19c9c66; color:var(--red)}
+.active-session {grid-column:1/-1}
+.session-heading {display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-bottom:20px}
+.session-heading h2 {margin-top:8px; overflow-wrap:anywhere}
+#screenPreview {display:block; background:#071016; width:100%; max-height:360px; border:1px solid var(--line); border-radius:12px; object-fit:contain; margin-bottom:20px}
+#captureControls {padding:18px; border:1px solid #86ded444; border-radius:12px; background:#14242d; margin-bottom:16px}
+.recorder-state {display:flex; align-items:center; gap:12px; margin-bottom:18px}
+.recorder-state div {flex:1; min-width:0}
+.recorder-state small {display:block; margin-top:5px; line-height:1.4}
+.recorder-state output {font-variant-numeric:tabular-nums; font-size:23px; color:var(--green)}
+.capture-dot {background:var(--green); height:10px; width:10px; border-radius:50%; flex:none; box-shadow:0 0 14px #86ded455}
+.capture-dot.recording {background:var(--red); box-shadow:0 0 14px #f19c9c66}
+.capture-buttons {display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px}
+.capture-buttons .go {min-width:160px}
+kbd {border:1px solid var(--line); border-radius:4px; padding:2px 5px; white-space:nowrap}
+#sentSection {margin-top:36px}
+.sent-clip {border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:18px 20px; display:flex; gap:18px; align-items:center; margin:12px 0}
+.sent-clip .clip-info {flex:1; min-width:0}
+.sent-clip b,.sent-clip small {display:block; overflow-wrap:anywhere}
+.sent-clip small {margin-top:6px; line-height:1.5}
+.sent-clip .clip-actions {display:flex; gap:14px; flex-wrap:wrap; align-items:center}
+.capture-footer {position:static; padding:30px 0; margin-top:20px; font-size:12px; color:var(--dim); line-height:1.6}
+.pip-body {padding:14px; margin:0; background:var(--bg)}
+.pip-body #captureControls {margin:0; padding:14px}
+.pip-body .capture-buttons .go {min-width:0; flex:1}
+.pip-body .hint {font-size:11px}
+@media(max-width:760px) {.capture-layout{grid-template-columns:minmax(0,1fr)} .capture-main{padding:28px 16px} .capture-card{padding:22px} .capture-header{padding:20px 16px;flex-wrap:wrap} .sent-clip{align-items:flex-start;flex-direction:column} .session-guide{display:none} .link-row{flex-wrap:wrap} .link-row button{width:100%}}

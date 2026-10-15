@@ -3,15 +3,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [[ "$(uname -s)" != Darwin ]]; then
-  echo 'Playtest Demon currently supports macOS laptops with Android recording or iOS imports.' >&2; exit 1
+  echo 'Playtest Demon currently supports macOS laptops with Android, browser recording or iOS imports.' >&2; exit 1
 fi
 QA_INSTALL_BREW=false
 QA_ANDROID_TOOLS=true
 for QA_SETUP_ARG in "$@"; do
   case "$QA_SETUP_ARG" in
     --brew) QA_INSTALL_BREW=true ;;
-    --ios) QA_ANDROID_TOOLS=false ;;
-    *) echo 'Usage: scripts/setup-mac.sh [--brew] [--ios]' >&2; exit 1 ;;
+    --ios|--laptop) QA_ANDROID_TOOLS=false ;;
+    *) echo 'Usage: scripts/setup-mac.sh [--brew] [--ios|--laptop]' >&2; exit 1 ;;
   esac
 done
 if $QA_INSTALL_BREW; then

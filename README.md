@@ -6,13 +6,13 @@ On Android, Playtest Demon keeps a configurable **0–30 second lookback** (10 s
 
 **Previously called QA Clip / QA Desk / QA Demon.** Updates install over the existing Android app; keep your app data. Existing inboxes, pairing, and the `QA Desk.command` launcher continue to work.
 
-**Android 10+ recorder · iPhone / iPad recording imports · macOS desk · Python 3.10+ · your own CLI login**
+**Laptop browser recorder · Android 10+ recorder · iPhone / iPad recording imports · macOS desk · Python 3.10+ · your own CLI login**
 
 ![The live video queue](docs/images/videos.png)
 
 ## The workflow
 
-1. **Capture and speak.** On Android, start a Playtest Demon session on Android and play your game. Press **Volume Up** when you see something; press again to finish. **Volume Down** discards an active clip. On iPhone/iPad, record the screen with Microphone On, AirDrop to your Mac and use **Import recording** ([iOS guide](docs/IOS.md)).
+1. **Capture and speak.** On your laptop, click **Start playtest session**, paste the game link, share its tab/window and record your voice. **Start clip → Finish & send** includes the same 0–30 second lookback ([laptop guide](docs/LAPTOP.md)). On Android, start a Playtest Demon session on Android and play your game. Press **Volume Up** when you see something; press again to finish. **Volume Down** discards an active clip. On iPhone/iPad, record the screen with Microphone On, AirDrop to your Mac and use **Import recording** ([iOS guide](docs/IOS.md)).
 2. **Follow the queue.** Videos appear automatically after transfer completes, even while another video is being analysed. The Live feed shows queued, extracting, transcribing, analysing, ready, and failed clips. Search by game, filter by status, pause the queue, or retry a failed clip.
 3. **Review one ticket.** Watch the relevant moment, edit the finding, inspect screenshots, then approve, reject, or leave it for later. Edits save automatically. Approval and rejection have Undo.
 4. **Run a batch.** Approved requests collect by game. Connect an existing local clone of your GitHub game repo, choose the fixing CLI/model/effort and its verification command, then click **Send batch to agent**. Each batch gets a fresh clone, a `playtest/…` branch, approved evidence, verification and a PR. Copy prompt remains available and does not submit or consume the batch.
@@ -22,7 +22,7 @@ On Android, Playtest Demon keeps a configurable **0–30 second lookback** (10 s
 
 ![Approved batches](docs/images/batches.png)
 
-Analysis runs **one video at a time**, in arrival order. Receiving, queue updates, and ticket review continue independently. Closing Playtest Demon stops processing; unfinished work is queued again on the next launch. Pausing lets the current analysis finish and holds subsequent videos.
+Analysis runs **one video at a time**, in arrival order. Receiving, queue updates, and ticket review continue independently. Quitting Playtest Demon stops processing; unfinished work is queued again on the next launch. Closing only its Mac window keeps it running. Pausing lets the current analysis finish and holds subsequent videos.
 
 ## Install with your agent
 
@@ -40,6 +40,16 @@ The app includes Python, Pillow and jsonschema. On a new Mac, ffmpeg, whisper wi
 
 Close the window to keep receiving in the background; click the Dock icon to bring it back. **⌘Q / Playtest Demon → Quit** stops the desk and its receiver. The app warns about in-progress work and unsaved edits. Use its menu to open the inbox, logs or browser version. Logs live in `~/Library/Logs/Playtest Demon/`; data remains in `~/Desktop/QA-Inbox` and existing phone pairing/model choices are reused.
 
+## Playtest a browser game on your laptop
+
+![Laptop playtest session setup](docs/images/laptop.png)
+
+Click **Start playtest session** in Live feed. It opens a recorder page in your default browser. Choose a game (or type a new one), paste the game URL, and use **Open game**. Start the session and choose the game tab/window in the sharing prompt. Voice is enabled by default; the 10-second suggested lookback catches the bug before you react.
+
+Use **Start clip**, describe the change, then **Finish & send**. Clips go straight into the same analysis → human review → approved batch flow. **Float controls** keeps the buttons above the game where Document Picture-in-Picture is available (tested in Chrome). Otherwise keep the recorder window beside the game. Controls and the ⌥⇧C shortcut work in the recorder/floating window, not globally inside a game tab. No extension or Android phone is required.
+
+Each tester currently needs their own running local Playtest Demon installation and CLI sign-in. This is local recording/analysis, not a hosted collection link. The Mac desk is still macOS-only, even though the recording UI uses browser APIs. See [laptop setup, privacy, limits and testing](docs/LAPTOP.md).
+
 ## Manual quick start (source / agents)
 
 ```bash
@@ -48,7 +58,7 @@ cd playtest-demon
 bash scripts/setup-mac.sh --brew
 ```
 
-This uses Homebrew for Python, ffmpeg, whisper.cpp, GitHub CLI, Java 21 and Android platform tools, and creates an isolated `.venv`. Install [Homebrew](https://brew.sh/) first if needed. For iOS-only use, run `bash scripts/setup-mac.sh --brew --ios` to skip Android tools. Without `--brew`, the script installs only the Python dependencies.
+This uses Homebrew for Python, ffmpeg, whisper.cpp, GitHub CLI, Java 21 and Android platform tools, and creates an isolated `.venv`. Install [Homebrew](https://brew.sh/) first if needed. For laptop-only use, run `bash scripts/setup-mac.sh --brew --laptop` to skip Android tools. For iOS-only use, run `bash scripts/setup-mac.sh --brew --ios` to skip Android tools. Without `--brew`, the script installs only the Python dependencies.
 
 Install and sign in to **one** provider:
 

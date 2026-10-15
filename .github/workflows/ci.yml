@@ -14,6 +14,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
       - run: node scripts/check-ui.js
+      - run: node --test tests/test_capture.js
   android:
     runs-on: ubuntu-latest
     steps:

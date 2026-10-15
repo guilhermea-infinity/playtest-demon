@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laptop playtest · Playtest Demon</title>
+  <link rel="icon" href="/devil.svg"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/playtest.css">
+  <script src="/playtest.js" defer></script>
+</head>
+<body class="capture-page">
+  <header class="capture-header"><a class="brand" href="/" target="_blank" rel="noopener"><img src="/devil.svg" alt=""><span><small>INFINITY GAMES</small>Playtest Demon</span></a><a href="/#videos" target="_blank" rel="noopener">Live feed & review ↗</a></header>
+  <main class="capture-main">
+    <div class="eyebrow">PLAYTEST ON THIS LAPTOP</div>
+    <h1>Play. Spot something. Say it.</h1>
+    <p class="capture-intro">Open your game, share its tab or window, and talk through what you want to change. Send short clips straight to your review queue.</p>
+    <div id="supportNotice" class="capture-notice" role="status" hidden></div>
+    <div class="capture-layout">
+      <section class="capture-card" id="setup">
+        <div class="eyebrow">01 · SET UP YOUR SESSION</div>
+        <label for="captureGame">Game <span>Choose one or type a new name</span></label>
+        <input id="captureGame" list="captureGames" maxlength="80" placeholder="e.g. Enigmic" autocomplete="off"><datalist id="captureGames"></datalist>
+        <label for="gameUrl">Game link <span>Optional for games already open</span></label>
+        <div class="link-row"><input id="gameUrl" type="url" maxlength="2048" placeholder="https://your-game.example"><button class="btn compact" id="openGame">Open game ↗</button></div>
+        <label class="mic-option"><input id="useMic" type="checkbox" checked> Record my voice <span>Recommended · explain the issue aloud</span></label>
+        <div class="lookback-heading"><label for="lookback">Lookback</label><output id="lookbackValue" for="lookback">10 seconds · suggested</output></div>
+        <input id="lookback" type="range" min="0" max="30" step="1" value="10">
+        <p class="hint">Keeps up to 30 seconds <strong>before</strong> you mark a clip. We suggest 10 seconds: notice a bug, then click — the moment is already caught, even if you can’t reproduce it.</p>
+        <button class="btn go start-session" id="startSession">◉ Start playtest session</button>
+        <p class="hint">You choose what to share in the browser’s prompt. Microphone permission follows. Only clips you send leave this page for your local desk.</p>
+      </section>
+      <section class="capture-card session-guide" id="guide">
+        <div class="eyebrow">YOUR GAME, YOUR VOICE, ONE LOOP</div>
+        <ol><li><b>Open your game.</b><p>Use the link beside the game field. Keep this recorder tab open.</p></li><li><b>Choose the game tab or window.</b><p>Share the game itself to avoid recording unrelated windows.</p></li><li><b>Mark it. Describe it. Send it.</b><p>Click Start clip, explain the bug or request, then Finish & send. Keep playing while the AI works.</p></li></ol>
+        <div class="capture-note"><b>No phone needed.</b><p>The same human review, approved batches and fixing agents follow every laptop clip.</p></div>
+      </section>
+      <section class="capture-card active-session" id="session" hidden>
+        <div class="session-heading"><div><div class="eyebrow">02 · SESSION IS LIVE</div><h2 id="sessionGame"></h2></div><button id="floatControls" class="btn compact" hidden>Float controls ↗</button></div>
+        <video id="screenPreview" autoplay muted playsinline aria-label="Preview of the screen you are sharing"></video>
+        <div id="controlsHome"><div id="captureControls">
+          <div class="recorder-state"><span id="recordDot" class="capture-dot"></span><div><b id="captureState">Lookback warming up…</b><small id="captureDetail">Your microphone is on.</small></div><output id="clipTimer">0:00</output></div>
+          <div class="capture-buttons"><button class="btn go" id="markClip">Start clip</button><button class="btn" id="discardClip" disabled>Discard clip</button><button class="text-button" id="endSession">End session</button></div>
+          <p class="hint">In this window: <kbd>⌥ ⇧ C</kbd> starts / sends a clip. Shortcuts do not work inside the game tab. Float these controls in Chrome or Edge to keep them above your game.</p>
+        </div></div>
+        <p class="hint">Lookback stays in memory and is discarded when the session ends. Clips finish automatically after 3 minutes. Leave the Mac app running to receive and analyse them.</p>
+      </section>
+    </div>
+    <div id="captureError" class="capture-notice error" role="alert" hidden></div>
+    <section id="sentSection" hidden><div class="session-heading"><div><div class="eyebrow">03 · YOUR OBSERVATIONS</div><h2>Keep playing. We’ll take it from here.</h2></div><a href="/#videos" target="_blank" rel="noopener">Open live feed ↗</a></div><p class="hint">A failed transfer stays here for retry or download. Keep this tab open until every clip is received.</p><div id="sentClips"></div></section>
+    <footer class="capture-footer">Local recording · Your selected AI analyses sent clips · Screen sharing always needs your permission</footer>
+  </main>
+</body>
+</html>

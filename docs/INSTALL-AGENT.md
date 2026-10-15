@@ -1,10 +1,10 @@
 # Install Playtest Demon for your owner
 
-You are installing a macOS playtest desk, an Android capture app if needed, and/or an iPhone recording import workflow. Complete the checks you can perform, guide the owner through Android permission prompts, and report what you actually verified. Do not claim an end-to-end phone test unless a real clip arrived and produced a ticket.
+You are installing a macOS playtest desk, an Android capture app if needed, a laptop browser recording session, and/or an iPhone recording import workflow. Complete the checks you can perform, guide the owner through Android permission prompts, and report what you actually verified. Do not claim an end-to-end phone test unless a real clip arrived and produced a ticket.
 
 ## 1. Inspect and choose
 
-- Confirm this is macOS. Android capture needs Android 10+. iPhone/iPad uses built-in screen recording and AirDrop; follow [IOS.md](IOS.md) and skip Android installation/permissions. Other laptop operating systems are not supported.
+- Confirm this is macOS. For laptop-only capture, follow [LAPTOP.md](LAPTOP.md) and skip Android tools, installation and permissions. Android capture needs Android 10+. iPhone/iPad uses built-in screen recording and AirDrop; follow [IOS.md](IOS.md) and skip Android installation/permissions. Other laptop operating systems are not supported.
 - Inspect `python3`, `brew`, `node`, `ffmpeg`, `ffprobe`, `whisper-cli`, `claude`, `codex`, Java, `git`, `gh`, `adb`, and the Android SDK. Reuse working installations.
 - Ask the owner to choose **Codex CLI or Claude Code**, a model or CLI default, the installation directory, and the inbox location if their preferences are not already known. Do not switch providers because one lacks credentials.
 - Check for an existing Playtest Demon (formerly QA Clip / QA Demon) installation and `~/Desktop/QA-Inbox`. Preserve data, settings and pairing keys. Back up the existing inbox before migration. Never put it inside the Git repository.
@@ -16,6 +16,7 @@ Clone the repository into an owner-approved directory. From that directory:
 
 ```bash
 bash scripts/setup-mac.sh --brew
+# Laptop-only: bash scripts/setup-mac.sh --brew --laptop
 # iOS-only: bash scripts/setup-mac.sh --brew --ios
 ```
 
@@ -49,7 +50,7 @@ Run `.venv/bin/python scripts/doctor.py --provider codex` (or `claude`). Resolve
 
 Prefer the release’s architecture-matching macOS DMG/app for daily use. Drag it into Applications and open it. Python/Pillow/jsonschema are embedded, so runtime does not depend on the source `.venv`. Install the external tools and owner-selected CLI/login as above. The current app build is Apple Silicon/macOS 14+; build on an Intel Mac for Intel.
 
-If a source-launched desk is running on port 8800, let current work finish and stop that process once before opening the app. Do not kill an unrelated service. Confirm `/api/health` identifies Playtest Demon and the intended inbox. Check the native window loads and the receiver is ready. The owner approves macOS folder/network prompts if shown. A downloaded app is locally signed, not notarized; use System Settings → Privacy & Security → Open Anyway if macOS asks.
+If a source-launched desk is running on port 8800, let current work finish and stop that process once before opening the app. Do not kill an unrelated service. Confirm `/api/health` identifies Playtest Demon and the intended inbox. Check the native window loads and the receiver is ready. The owner approves macOS folder/network prompts if shown. Ad-hoc signed updates can ask for Desktop-folder access again; approve the prompt, and reopen the app if its first startup timed out while waiting. A downloaded app is locally signed, not notarized; use System Settings → Privacy & Security → Open Anyway if macOS asks.
 
 Closing the window keeps the desk available through the Dock. Cmd+Q stops the owned desk and receiver. Confirm Quit/relaunch against a disposable inbox before claiming lifecycle verification. Logs are in `~/Library/Logs/Playtest Demon/`. Do not uninstall/reset the app’s data to troubleshoot.
 
@@ -87,6 +88,8 @@ These are owner actions, not permissions an agent should silently grant:
 Do not disable platform protections or change unrelated accessibility services.
 
 ## 6. Start and verify the full loop
+
+For a prebuilt app install, open Playtest Demon.app from Applications; use the commands below only for source launches. For laptop capture, use **Start playtest session** and the real-screen verification in [LAPTOP.md](LAPTOP.md), then verify review/approval below. Browser screen/microphone permission and the choice of shared surface are owner actions. Do not substitute a synthetic canvas test for a real permission/capture test.
 
 ```bash
 ./Playtest\ Demon.command --provider codex

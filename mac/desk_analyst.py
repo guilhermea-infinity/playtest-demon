@@ -292,7 +292,7 @@ class Analyst(threading.Thread):
         hint = (f"\nThe tester rejected your first draft of this clip and said: \"{hint}\". Use that.\n") if hint else ""
         fill = {
             "platform": meta.get("platform", "Android"),
-            "capture_instructions": "This is an imported recording. There was no hardware button press, lookback, or Playtest Demon REC overlay. Read the entire overview and follow the spoken request timings; 0 seconds is the start, not a reaction trigger." if meta.get("platform") in ("iOS", "Imported") else "The tester used the Android volume-button recorder and its configured lookback.",
+            "capture_instructions": "This is an imported recording. There was no hardware button press, lookback, or Playtest Demon REC overlay. Read the entire overview and follow the spoken request timings; 0 seconds is the start, not a reaction trigger." if meta.get("platform") in ("iOS", "Imported") else "The tester used laptop browser screen capture with a Start clip control and configurable lookback. pressed_at_second marks their reaction; earlier footage can show the bug. There is no Android recorder overlay." if meta.get("platform") == "Browser" else "The tester used the Android volume-button recorder and its configured lookback.",
             "game": game, "app": meta.get("app", "?"), "version": meta.get("appVersion") or meta.get("version") or "?",
             "device": meta.get("device", "?"), "android": meta.get("android") or meta.get("platform", "?"),
             "length": f"{dur:.1f}", "width": str(min(720, w)), "height": str(round(h * min(720, w) / w)),
