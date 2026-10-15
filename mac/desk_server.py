@@ -21,7 +21,7 @@ def make_handler(store, port):
     origins = {f"http://{h}" for h in hosts}
 
     class H(BaseHTTPRequestHandler):
-        server_version = "PlaytestDemon/0.4.0"
+        server_version = "PlaytestDemon/0.5.0"
 
         def log_message(self, *a):
             pass
@@ -71,6 +71,8 @@ def make_handler(store, port):
                 with log.open("rb") as f:
                     f.seek(max(0, log.stat().st_size - 16000))
                     return self._json({"text": f.read().decode("utf-8", "replace")})
+            if u.path == "/api/health":
+                return self._json({"app": "playtest-demon", "version": "0.5.0", "inbox": str(store.inbox.resolve())})
             if u.path == "/api/state":
                 return self._json(store.state())
             if u.path.startswith("/media/"):

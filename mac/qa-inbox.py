@@ -20,6 +20,7 @@ import os
 import re
 import shutil
 import socket
+import signal
 import subprocess
 import sys
 import threading
@@ -301,6 +302,7 @@ def main():
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--devices", default="~/.config/qa-clip/devices.json", help="approved phones")
     ap.add_argument("--no-usb", action="store_true", help="skip adb reverse")
+    ap.add_argument("--no-bonjour", action="store_true", help="skip Wi-Fi advertisement (isolated tests)")
     a = ap.parse_args()
 
     inbox = Path(os.path.expanduser(a.inbox))
@@ -310,13 +312,17 @@ def main():
 
     srv = ThreadingHTTPServer(("0.0.0.0", a.port), make_handler(inbox, devices, name))
     srv.daemon_threads = True
-    dns = bonjour(name, a.port)
+    dns = None if a.no_bonjour else bonjour(name, a.port)
     if not a.no_usb:
         threading.Thread(target=usb_loop, args=(a.port,), daemon=True).start()
 
     print(f"\nQA Inbox is on.\n  Clips go to  {inbox}\n  Wi-Fi        {name} (Bonjour, port {a.port})"
           f"\n  USB          {'any phone or emulator plugged in' if adb_path() and not a.no_usb else 'off'}"
           f"\nLeave this window open while you play. Ctrl+C to stop.\n", flush=True)
+    def stop(*_):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGHUP, stop)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
@@ -324,6 +330,10 @@ def main():
     finally:
         if dns:
             dns.terminate()
+            try:
+                dns.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                dns.kill()
         srv.server_close()
         print("\nQA Inbox stopped.")
 

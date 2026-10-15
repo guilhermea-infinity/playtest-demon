@@ -52,8 +52,9 @@ def port_busy(port):
 def start_inbox(inbox):
     if port_busy(8799):
         raise RuntimeError("Port 8799 is occupied. Stop the existing receiver, or use --no-inbox after confirming it writes to this inbox.")
-    p = subprocess.Popen([sys.executable, "-u", str(HERE / "qa-inbox.py"), "--inbox", str(inbox)],
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    command = [sys.executable, "--receiver"] if getattr(sys, "frozen", False) else [sys.executable, "-u", str(HERE / "qa-inbox.py")]
+    p = subprocess.Popen([*command, "--inbox", str(inbox)],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
 
     def pump():
         for line in p.stdout:
@@ -137,11 +138,17 @@ def main():
         runner.cancel_process()
         srv.server_close()
         if child:
-            child.terminate()
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
             try:
                 child.wait(5)
             except Exception:
-                child.kill()
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
         print("\nPlaytest Demon stopped.")
 
 

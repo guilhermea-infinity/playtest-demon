@@ -31,3 +31,20 @@ jobs:
         with:
           name: PlaytestDemon-debug-apk
           path: out/*.apk
+  mac-app:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install -r requirements-mac-build.txt
+      - run: python scripts/package-mac.py
+      - name: Verify bundled service
+        run: '"out/mac/Playtest Demon.app/Contents/Resources/service/PlaytestDemonService" --help'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PlaytestDemon-macOS-app
+          path: |
+            out/mac/*.zip
+            out/mac/*.dmg

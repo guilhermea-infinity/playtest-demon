@@ -45,7 +45,17 @@ An alternate model path can be supplied with `QA_WHISPER_MODEL`. This environmen
 
 Run `.venv/bin/python scripts/doctor.py --provider codex` (or `claude`). Resolve required missing tools; explicitly report if voice transcription is unavailable.
 
-## 3. Build and install Android (skip for iOS)
+## 3. Install the Mac app
+
+Prefer the release’s architecture-matching macOS DMG/app for daily use. Drag it into Applications and open it. Python/Pillow/jsonschema are embedded, so runtime does not depend on the source `.venv`. Install the external tools and owner-selected CLI/login as above. The current app build is Apple Silicon/macOS 14+; build on an Intel Mac for Intel.
+
+If a source-launched desk is running on port 8800, let current work finish and stop that process once before opening the app. Do not kill an unrelated service. Confirm `/api/health` identifies Playtest Demon and the intended inbox. Check the native window loads and the receiver is ready. The owner approves macOS folder/network prompts if shown. A downloaded app is locally signed, not notarized; use System Settings → Privacy & Security → Open Anyway if macOS asks.
+
+Closing the window keeps the desk available through the Dock. Cmd+Q stops the owned desk and receiver. Confirm Quit/relaunch against a disposable inbox before claiming lifecycle verification. Logs are in `~/Library/Logs/Playtest Demon/`. Do not uninstall/reset the app’s data to troubleshoot.
+
+For a source build, run `.venv/bin/python -m pip install -r requirements-mac-build.txt`, then `.venv/bin/python scripts/package-mac.py`. The `.app` in `out/mac/` is movable; keep its Contents intact. Keep source terminal commands available for diagnostics, not as the owner’s daily launch requirement.
+
+## 4. Build and install Android (skip for iOS)
 
 Use Android Studio's SDK Manager to install Android SDK Platform 36 and Build Tools 35.0.0. Its usual macOS SDK location is `~/Library/Android/sdk`. Set `ANDROID_HOME` if different. With command-line SDK tools already available, the equivalent is:
 
@@ -64,7 +74,7 @@ Alternatively, download the versioned APK and checksum file from this repository
 
 If Android reports `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the installed app uses a different signing key. Stop before uninstalling: that would erase unsent clips. Ask the owner to export/send the clips first or use an APK built with the original signing key. Keep the same local debug key for future local upgrades.
 
-## 4. Guide the owner through Android permissions (skip for iOS)
+## 5. Guide the owner through Android permissions (skip for iOS)
 
 These are owner actions, not permissions an agent should silently grant:
 
@@ -76,7 +86,7 @@ These are owner actions, not permissions an agent should silently grant:
 
 Do not disable platform protections or change unrelated accessibility services.
 
-## 5. Start and verify the full loop
+## 6. Start and verify the full loop
 
 ```bash
 ./Playtest\ Demon.command --provider codex
@@ -98,9 +108,9 @@ Use `--inbox /absolute/path` for a custom inbox. Open http://127.0.0.1:8800. If 
 
 For iOS verification, record a harmless spoken request with the system microphone enabled, AirDrop it, import the MOV in the desk, and verify transcription, review, approval and the batch. A synthetic MOV check is not a physical iPhone test.
 
-## 6. Leave a clear handover
+## 7. Leave a clear handover
 
-Give the owner the repository path, inbox path, chosen CLI/model, exact launch command and any unverified items. Double-clicking Playtest Demon.command works after setup and remembers provider/model settings. Keep Terminal open; Ctrl+C stops the desk. The browser's Pause queue control is persistent and does not stop the receiver.
+Give the owner the repository path, inbox path, chosen CLI/model, exact launch command and any unverified items. Opening Playtest Demon.app from Applications is the daily launch path and remembers provider/model settings. Closing its window keeps receiving; Cmd+Q stops it. For a source-only launch, keep Terminal open and use Ctrl+C to stop. The browser's Pause queue control is persistent and does not stop the receiver.
 
 ## Troubleshooting
 

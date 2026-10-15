@@ -32,7 +32,15 @@ Give Codex or Claude Code this prompt:
 
 The detailed [agent installation runbook](docs/INSTALL-AGENT.md) includes prerequisites, exact commands, human permission steps, verification, and recovery. iPhone/iPad imports use Apple’s built-in recorder; no iOS app installation is required. Windows and Linux desktops are not supported.
 
-## Manual quick start
+## Open it like a Mac app
+
+Download the **macOS app / DMG** from [Releases](https://github.com/guilhermea-infinity/playtest-demon/releases). Open the DMG, drag **Playtest Demon.app** into **Applications**, and double-click it. The desk opens in its own window with a Dock icon; no Terminal command or browser tab is required for daily use.
+
+The app includes Python, Pillow and jsonschema. On a new Mac, ffmpeg, whisper with its voice model, the chosen CLI/login, and GitHub/Android tools still need the [initial setup](docs/INSTALL-AGENT.md). The current downloadable app is for **Apple Silicon, macOS 14+**; Intel users can build it on an Intel Mac using the packaging script below. It is locally signed; another Mac may need **System Settings → Privacy & Security → Open Anyway** because it is not Apple-notarized.
+
+Close the window to keep receiving in the background; click the Dock icon to bring it back. **⌘Q / Playtest Demon → Quit** stops the desk and its receiver. The app warns about in-progress work and unsaved edits. Use its menu to open the inbox, logs or browser version. Logs live in `~/Library/Logs/Playtest Demon/`; data remains in `~/Desktop/QA-Inbox` and existing phone pairing/model choices are reused.
+
+## Manual quick start (source / agents)
 
 ```bash
 git clone https://github.com/guilhermea-infinity/playtest-demon.git
@@ -64,7 +72,7 @@ Launch your chosen provider:
 ./Playtest\ Demon.command --provider claude --model sonnet
 ```
 
-The browser opens at **http://127.0.0.1:8800**. After initial setup, double-click **Playtest Demon.command**. Keep its Terminal window open while testing.
+The source launcher opens **http://127.0.0.1:8800** and keeps its Terminal window open. For daily use, open **Playtest Demon.app** from Applications instead. Stop a source-launched desk once before switching to the app so the app can own the background service.
 
 **Choose a model:** open analyst settings at the top right. Playtest Demon reads the installed CLI’s model catalog and shows each model’s supported reasoning efforts. Choose **Use CLI configured default** to keep your CLI configuration, or select a listed model and effort. **Refresh models** reloads the catalog (normally cached for five minutes). Models and capabilities vary by CLI version and account; a catalog entry is not a guarantee of quota or access. Discovery does not send a clip or inference prompt. If discovery fails, the page explains why and preserves your saved choice. Settings apply to the next video; the current analysis keeps its original provider, model, and effort. No API key is needed with supported subscription login.
 
@@ -195,6 +203,17 @@ Videos are transferred locally over plain HTTP; use trusted Wi-Fi or USB. The re
 - Screens are analysed as sampled frames plus a transcript, not as native video input. Brief animation or timing bugs may be missed and should be checked by the reviewer.
 - One analysis at a time. Long clips and local transcription can take several minutes; provider runs time out after 15 minutes.
 - Builds are debug APKs for sideloading, not Play Store releases. Locally built APKs use your machine's debug signing key. A signature mismatch must not be “fixed” by uninstalling without the owner's approval; uninstalling deletes phone-side clips.
+
+## Build the Mac app
+
+On a Mac with Xcode command-line tools installed:
+
+```bash
+.venv/bin/python -m pip install -r requirements-mac-build.txt
+.venv/bin/python scripts/package-mac.py
+```
+
+The output is `out/mac/Playtest Demon.app`, an architecture-named ZIP and a drag-to-Applications DMG. The app runs independently of the source folder and `.venv`; it packages only code/runtime, with no inbox, CLI credentials, phone keys or signing secrets. It is ad-hoc signed for local use; Developer ID signing/notarization needs your Apple developer identity. Build on each target Mac architecture. Packaging requires Python 3.10+ and a Python runtime compatible with macOS 14+.
 
 ## Development
 
