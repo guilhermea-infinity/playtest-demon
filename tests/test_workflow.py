@@ -133,6 +133,37 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(calls)
         self.assertEqual(self.store.tickets['GA-001']['status'],'fixing')
 
+    def test_failed_checks_retry_saved_code_without_another_agent_or_clone(self):
+        r,_=self.full_run(False);rid=r['id'];clone=self.runner.root/rid/'repo'
+        self.assertEqual(r['status'],'failed')
+        (clone/'game.py').write_text('def reward():\n    return 3\n# corrected after failed checks\n')
+        retry=self.runner.retry_checks(rid)
+        self.assertEqual(retry['id'],rid);self.assertEqual(retry['status'],'retesting')
+        self.assertEqual(self.runner.retry_checks(rid)['verificationAttempts'],1)
+        with patch.object(self.runner,'agent') as agent,patch.object(self.runner,'publish') as publish,patch.object(self.runner,'execute',wraps=self.runner.execute) as execute:
+            self.runner.perform(retry)
+        agent.assert_not_called();publish.assert_called_once()
+        self.assertTrue(self.runner.items()[0]['testsPassed'])
+        self.assertFalse(any('clone' in call.args[1] for call in execute.call_args_list))
+        self.assertEqual(self.store.tickets['GA-001']['runId'],rid)
+
+    def test_retry_checks_requires_complete_result_and_unchanged_reservation(self):
+        r=self.clarification_run()
+        with self.assertRaises(ValueError):self.runner.retry_checks(r['id'])
+        self.runner.update(r['id'],status='failed',result={'summary':'Done','addressed':r['tickets'],'unaddressed':[],'notes':''})
+        self.store.tickets['GA-001'].pop('runId')
+        with self.assertRaises(ValueError):self.runner.retry_checks(r['id'])
+
+    def test_verification_does_not_traverse_other_projects_browser_cache(self):
+        r=self.runner.submit('Game',['GA-001'])
+        output=self.root/'environment.txt'
+        script='import os;from pathlib import Path;Path('+repr(str(output))+').write_text(os.getenv("PLAYWRIGHT_SKIP_BROWSER_GC","unset"))'
+        with patch('desk_runs.child_env',return_value={}):
+            self.runner.execute(r['id'],[sys.executable,'-c',script],self.root,verification=True)
+            self.assertEqual(output.read_text(),'1')
+            self.runner.execute(r['id'],[sys.executable,'-c',script],self.root)
+            self.assertEqual(output.read_text(),'unset')
+
     def test_existing_pr_is_reused_after_publication_response_loss(self):
         r,calls=self.full_run(existing=True)
         self.assertEqual(r['status'],'pr_ready',r.get('error'))

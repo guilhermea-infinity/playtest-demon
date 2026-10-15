@@ -99,7 +99,7 @@ class Store:
             affected = {rel: c for rel, c in self.clips.items() if (c.get('meta', {}).get('game') or c.get('meta', {}).get('appLabel') or c.get('meta', {}).get('app') or rel.split('/')[0]) == old}
             if any(c.get('status') == 'working' for c in affected.values()):
                 raise ValueError('Let this game’s current analysis finish before renaming it')
-            active = {'queued', 'preparing', 'fixing', 'testing', 'publishing', 'recovering', 'continuing', 'needs_review', 'failed', 'interrupted', 'pr_ready', 'merge_queued'}
+            active = {'queued', 'preparing', 'fixing', 'testing', 'publishing', 'recovering', 'continuing', 'retesting', 'needs_review', 'failed', 'interrupted', 'pr_ready', 'merge_queued'}
             if any(r.get('game') == old and r.get('status') in active for r in read_json(self.root / 'runs.json', [])):
                 raise ValueError('Finish or return this game’s active fixing batch before renaming it')
             repos = read_json(self.root / 'repositories.json', {})

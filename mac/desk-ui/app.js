@@ -128,6 +128,7 @@ function render() {
         "queued",
         "preparing",
         "continuing",
+        "retesting",
         "needs_review",
         "fixing",
         "testing",
@@ -801,6 +802,7 @@ function renderSide() {
               "queued",
               "preparing",
               "continuing",
+        "retesting",
               "needs_review",
               "fixing",
               "testing",
@@ -1363,6 +1365,7 @@ const runLabels = {
   publishing: "Publishing PR",
   recovering: "Recovering publication",
   continuing: "Continuing saved work",
+  retesting: "Retrying checks · work saved",
   needs_review: "Your answers needed",
   pr_ready: "PR ready for review",
   merge_queued: "Merge queued on GitHub",
@@ -1381,7 +1384,7 @@ function runSteps(r) {
       "pr_ready",
       "merged",
     ],
-    index = order.indexOf(canReviewRun(r) || r.status === "continuing" ? "fixing" : r.status === "merge_queued" ? "pr_ready" : r.status);
+    index = order.indexOf(canReviewRun(r) || r.status === "continuing" ? "fixing" : r.status === "retesting" ? "testing" : r.status === "merge_queued" ? "pr_ready" : r.status);
   return `<div class="run-steps">${["Branch", "Implement", "Verify", "PR", "Review / merge", "Playtest"].map((s, i) => `<span class="${i < index ? "complete" : i === index ? "current" : ""}">${i < index ? "✓" : i + 1} ${s}</span>`).join("")}</div>`;
 }
 function runActions(r) {
@@ -1389,13 +1392,14 @@ function runActions(r) {
     "queued",
     "preparing",
     "continuing",
+        "retesting",
     "needs_review",
     "fixing",
     "testing",
     "failed",
     "interrupted",
   ].includes(r.status);
-  return `<div class="run-actions">${canReviewRun(r) ? `<button class="btn go compact" onclick="openRun('${r.id}')">Review agent notes · ${r.result.unaddressed.length} →</button>` : ""}<button class="btn compact" onclick="openRun('${r.id}')">Details & log</button>${r.pr ? `<a class="btn compact" target="_blank" rel="noopener" href="${esc(r.pr)}">Open PR ↗</a><button class="text-button" onclick="runAction('${r.id}','refresh')">Refresh GitHub</button>` : ""}${["pr_ready", "merge_queued"].includes(r.status) && r.repository.autoMerge && !r.autoMergeDisabled ? `<button class="text-button" onclick="runAction('${r.id}','disable_merge')">Stop auto merge</button>` : ""}${r.status === "pr_ready" && !r.autoMergeDisabled ? `<button class="btn go compact" onclick="mergeRun('${r.id}')">Queue merge</button>` : ""}${editable ? `<button class="text-button danger-text" onclick="cancelRun('${r.id}')">${["failed", "interrupted", "needs_review"].includes(r.status) ? "Return tickets to batch" : "Cancel run"}</button>` : ""}${["failed", "interrupted"].includes(r.status) && r.testsPassed ? `<button class="btn compact" onclick="runAction('${r.id}','recover')">Recover publication</button>` : ""}</div>`;
+  return `<div class="run-actions">${canReviewRun(r) ? `<button class="btn go compact" onclick="openRun('${r.id}')">Review agent notes · ${r.result.unaddressed.length} →</button>` : ""}<button class="btn compact" onclick="openRun('${r.id}')">Details & log</button>${r.pr ? `<a class="btn compact" target="_blank" rel="noopener" href="${esc(r.pr)}">Open PR ↗</a><button class="text-button" onclick="runAction('${r.id}','refresh')">Refresh GitHub</button>` : ""}${["pr_ready", "merge_queued"].includes(r.status) && r.repository.autoMerge && !r.autoMergeDisabled ? `<button class="text-button" onclick="runAction('${r.id}','disable_merge')">Stop auto merge</button>` : ""}${r.status === "pr_ready" && !r.autoMergeDisabled ? `<button class="btn go compact" onclick="mergeRun('${r.id}')">Queue merge</button>` : ""}${editable ? `<button class="text-button danger-text" onclick="cancelRun('${r.id}')">${["failed", "interrupted", "needs_review"].includes(r.status) ? "Return tickets to batch" : "Cancel run"}</button>` : ""}${["failed", "interrupted"].includes(r.status) && !r.headSha && r.result?.addressed?.length === r.tickets.length && !r.result?.unaddressed?.length ? `<button class="btn go compact" onclick="runAction('${r.id}','retry_checks')">Retry checks on saved work →</button>` : ""}${["failed", "interrupted"].includes(r.status) && r.testsPassed ? `<button class="btn compact" onclick="runAction('${r.id}','recover')">Recover publication</button>` : ""}</div>`;
 }
 function renderRuns() {
   const runs = (S.runs || [])
@@ -1517,7 +1521,7 @@ async function runAction(id, action) {
   toast(
     action === "recover"
       ? "Recovering the verified branch and PR."
-      : "Run updated.",
+      : action === "retry_checks" ? "Retrying checks on the saved branch. The agent will not rerun." : "Run updated.",
   );
 }
 function cancelRun(id) {
