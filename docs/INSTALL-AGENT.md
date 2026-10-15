@@ -75,7 +75,11 @@ Alternatively, download the versioned APK and checksum file from this repository
 
 If Android reports `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the installed app uses a different signing key. Stop before uninstalling: that would erase unsent clips. Ask the owner to export/send the clips first or use an APK built with the original signing key. Keep the same local debug key for future local upgrades.
 
-## 5. Guide the owner through Android permissions (skip for iOS)
+## 5. Pair the intended laptop and guide Android permissions (skip for iOS)
+
+Install Mac/Android **0.6.1+ together**. In the Mac’s Live feed, click **Pair Android**. Have the owner enter that code in the phone’s **Mac · tap to pair** row. Never choose a laptop merely because Bonjour discovers it, its name matches, or it previously approved the phone. The full receiver identity is pinned after the explicit code match. Verify phone name/code correspond to this Mac. A Wi-Fi phone still needs approval on its chosen Mac. If that Mac goes offline, clips stay queued; do not route them elsewhere to make a test pass.
+
+Updating the APK preserves saved clips, the app package/signing key and capture preferences. Existing installations require this one-time explicit pairing instead of inheriting a potentially wrong old address. Already addressed queued clips retain their original destination; old unaddressed clips are adopted only by the owner’s explicit pairing choice. Do not move/delete a coworker’s inbox to compensate for old misrouting.
 
 These are owner actions, not permissions an agent should silently grant:
 
@@ -122,8 +126,8 @@ Give the owner the repository path, inbox path, chosen CLI/model, exact launch c
 | Missing CLI / sign-in banner | Run the selected CLI's login command in Terminal; make sure it is on PATH. Queue checks again automatically. |
 | Model failure or usage limit | Read the card's error; choose a valid vision model or wait for account quota, then Retry. |
 | No spoken quote | Check mic permission, `whisper-cli`, its model, and `QA_WHISPER_MODEL`. |
-| No USB arrival | `adb devices`, cable/authorization, receiver port 8799, `adb -s SERIAL reverse tcp:8799 tcp:8799`. |
-| No Wi-Fi arrival | Same trusted network, Mac firewall approval, pairing dialog, Bonjour allowed. Try USB. |
+| No USB arrival | Mac/Android 0.6.1+, correct pairing code, `adb devices`, cable/authorization, receiver port 8799, `adb -s SERIAL reverse tcp:8799 tcp:8799`. |
+| No Wi-Fi arrival | Correct pairing code and Mac/Android 0.6.1+, same trusted network, Mac firewall approval, phone-approval dialog, Bonjour allowed. Try USB. |
 | Clip waits on phone | Keep Playtest Demon running and the Mac awake. The phone retries automatically. |
 | Empty review | Videos may still be processing or the queue may be paused. Review has only unapproved drafts. |
 | Interrupted fix run | Work stays in `AgentRuns/`. Recover publication for a verified commit, or return the requests to approval and start a new batch. Never rerun/publish silently. |
@@ -134,3 +138,5 @@ Give the owner the repository path, inbox path, chosen CLI/model, exact launch c
 | Python import error | Rerun `bash scripts/setup-mac.sh` and launch through Playtest Demon.command, which uses `.venv`. |
 
 Data lives outside Git. Back up the inbox separately. Delete neither the inbox nor `~/.config/qa-clip/devices.json` as a troubleshooting shortcut.
+
+Keep `~/.config/qa-clip/identity.json` with this laptop when updating. Never copy a receiver identity/pairing configuration into shared ZIPs or another tester’s installation.

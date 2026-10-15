@@ -13,6 +13,7 @@ from pathlib import Path
 import desk_analyst
 import desk_server
 import desk_runs
+import desk_identity
 
 
 def main():

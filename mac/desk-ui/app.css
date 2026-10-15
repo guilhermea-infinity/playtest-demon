@@ -16,6 +16,7 @@
   background: var(--bg);
   color: var(--text);
 }
+.pair-code {display:block; margin:24px 0; padding:22px; border:1px solid var(--line); border-radius:12px; background:var(--panel2); color:var(--green); font:700 clamp(24px,6vw,40px) ui-monospace,monospace; letter-spacing:4px; text-align:center; overflow-wrap:anywhere}
 * {
   box-sizing: border-box;
 }

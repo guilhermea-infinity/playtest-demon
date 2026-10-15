@@ -31,8 +31,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Sends saved clips to the Mac running qa-inbox.py. Finds it three ways, in order:
- * the last Mac that worked, Bonjour on the Wi-Fi (_qaclip._tcp), and a USB cable (adb reverse to 127.0.0.1).
+ * Sends clips only to the explicitly paired Mac. Bonjour/USB locate that same identity;
+ * another computer is never a fallback, even if it previously approved this phone.
  * Clips stay in the outbox until the Mac confirms the byte count, so nothing is lost offline.
  */
 final class Uploader {
@@ -46,11 +46,12 @@ final class Uploader {
     }
 
     volatile boolean ok;
-    volatile String state = "Looking for your Mac…";
+    volatile String state = "Tap Mac to pair with your laptop";
 
     private final Context ctx;
     private final SharedPreferences sp;
     private final Object wake = new Object();
+    private final Object routeLock = new Object();
     private final Set<String> found = Collections.synchronizedSet(new LinkedHashSet<>());
     private NsdManager nsd;
 
@@ -73,7 +74,7 @@ final class Uploader {
         while (true) {
             try {
                 File[] clips = Clips.waiting(ctx);
-                String mac = reach();
+                Target mac = reach();
                 if (mac != null) {
                     for (File f : clips) if (!send(mac, f)) break;
                     syncGames(mac);
@@ -87,31 +88,83 @@ final class Uploader {
         }
     }
 
-    private String reach() {
+    static final class Target {
+        final String address, id;
+        Target(String address, String id) { this.address = address; this.id = id; }
+    }
+
+    String macCode() { return sp.getString("macCode", ""); }
+    String macId() { return sp.getString("macId", ""); }
+
+    void chooseMac(String code) throws Exception {
+        code = MacRoute.normalize(code);
+        if (!MacRoute.validCode(code)) throw new IllegalArgumentException("Enter the 8-character code shown on your Mac");
+        synchronized (routeLock) {
+            // Only an explicit choice adopts old, unaddressed clips. Already addressed clips stay put.
+            for (File mp4 : Clips.waiting(ctx)) {
+                File js = new File(mp4.getParent(), mp4.getName().replace(".mp4", ".json"));
+                if (!js.exists()) continue;
+                JSONObject meta = new JSONObject(new String(Files.readAllBytes(js.toPath()), StandardCharsets.UTF_8));
+                if (meta.optString("receiverCode").isEmpty() && meta.optString("receiverId").isEmpty()) {
+                    meta.put("receiverCode", code);
+                    saveMeta(js, meta.toString());
+                }
+            }
+            if (!code.equals(macCode())) sp.edit().putString("macCode", code).remove("macId").remove("macName").remove("last").commit();
+            ok = false; state = "Finding your Mac · " + code;
+        }
+        kick();
+    }
+
+    private Target reach() {
+        MacRoute route = new MacRoute(macCode(), macId());
+        if (!MacRoute.validCode(route.code)) { ok = false; state = "Tap Mac to pair with your laptop"; return null; }
         Set<String> tries = new LinkedHashSet<>();
         String last = sp.getString("last", null);
         if (last != null) tries.add(last);
         synchronized (found) { tries.addAll(found); }
         tries.add("127.0.0.1:" + PORT);
         String why = null;
-        for (String t : tries) {
-            JSONObject j = ping(t);
-            if (j == null) continue;
-            String name = j.optString("name", "your Mac"), st = j.optString("status");
-            if ("approved".equals(st)) {
-                state = name;
-                ok = true;
-                if (!t.equals(last)) sp.edit().putString("last", t).apply();
-                return t;
+        for (String address : tries) {
+            // Discover identity WITHOUT sending the phone key, games or clips to an unrelated Mac.
+            JSONObject identity = identity(address);
+            if (identity == null || !route.accepts(identity.optString("id"))) continue;
+            String id = identity.optString("id"), name = identity.optString("name", "Your Mac");
+            synchronized (routeLock) {
+                if (!route.code.equals(macCode()) || (!macId().isEmpty() && !macId().equals(id))) return null;
+                sp.edit().putString("macId", id).putString("macName", name).commit();
             }
-            why = "pending".equals(st) ? "Click Allow on " + name : name + " said no";
+            Target target = new Target(address, id);
+            JSONObject j = ping(target);
+            if (j == null) continue;
+            String st = j.optString("status");
+            if ("approved".equals(st)) {
+                synchronized (routeLock) {
+                    if (!id.equals(macId())) return null;
+                    state = name + " · " + route.code; ok = true;
+                    if (!address.equals(last)) sp.edit().putString("last", address).apply();
+                }
+                return target;
+            }
+            why = "pending".equals(st) ? "Click Allow on " + name : name + " declined this phone";
         }
         ok = false;
-        state = why != null ? why : "Looking for your Mac…";
+        state = why != null ? why : sp.getString("macName", "Your Mac") + " offline · clips stay here";
         return null;
     }
 
-    private JSONObject ping(String target) {
+    private JSONObject identity(String address) {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL("http://" + address + "/identity").openConnection();
+            c.setUseCaches(false); c.setConnectTimeout(1000); c.setReadTimeout(1500);
+            if (c.getResponseCode() != 200) return null;
+            return new JSONObject(read(c.getInputStream()));
+        } catch (Exception e) { return null; }
+        finally { if (c != null) c.disconnect(); }
+    }
+
+    private JSONObject ping(Target target) {
         HttpURLConnection c = null;
         try {
             c = open(target, "/ping");
@@ -126,7 +179,8 @@ final class Uploader {
         }
     }
 
-    private void syncGames(String target) {
+    private void syncGames(Target target) {
+        if (!target.id.equals(macId())) return;
         HttpURLConnection c = null;
         try {
             Set<String> pending = Games.pending(ctx);
@@ -151,11 +205,28 @@ final class Uploader {
         finally { if (c != null) c.disconnect(); }
     }
 
-    private boolean send(String target, File mp4) {
+    private void saveMeta(File file, String value) throws Exception {
+        java.nio.file.Path temp = new File(file.getParent(), file.getName() + ".route.tmp").toPath();
+        Files.write(temp, value.getBytes(StandardCharsets.UTF_8));
+        try { Files.move(temp, file.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
+        catch (java.nio.file.AtomicMoveNotSupportedException e) { Files.move(temp, file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
+    }
+
+    private boolean send(Target target, File mp4) {
         File js = new File(mp4.getParent(), mp4.getName().replace(".mp4", ".json"));
         HttpURLConnection c = null;
         try {
-            String meta = js.exists() ? new String(Files.readAllBytes(js.toPath()), StandardCharsets.UTF_8) : "{}";
+            String meta;
+            synchronized (routeLock) {
+                if (!target.id.equals(macId())) return false;
+                if (!js.exists()) return true; // recorder has not finished writing metadata yet
+                JSONObject j = new JSONObject(new String(Files.readAllBytes(js.toPath()), StandardCharsets.UTF_8));
+                MacRoute route = new MacRoute(macCode(), target.id);
+                if (!route.ownsClip(j.optString("receiverCode"), j.optString("receiverId"))) return true;
+                j.put("receiverId", target.id);
+                meta = j.toString();
+                saveMeta(js, meta);
+            }
             c = open(target, "/clip");
             c.setRequestMethod("POST");
             c.setDoOutput(true);
@@ -185,9 +256,10 @@ final class Uploader {
         }
     }
 
-    private HttpURLConnection open(String target, String path) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL("http://" + target + path).openConnection();
+    private HttpURLConnection open(Target target, String path) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL("http://" + target.address + path).openConnection();
         c.setUseCaches(false);
+        c.setRequestProperty("X-QA-Mac", target.id);
         c.setRequestProperty("X-QA-Key", key());
         c.setRequestProperty("X-QA-Device", URLEncoder.encode(deviceName(), "UTF-8"));
         return c;

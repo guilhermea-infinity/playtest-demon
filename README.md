@@ -119,13 +119,14 @@ For a prebuilt APK, download it from [Releases](https://github.com/guilhermea-in
 
 On the phone:
 
+- On the Mac, click **Pair Android**. On the phone, tap **Mac · tap to pair** and enter this laptop’s code. Each coworker uses their own laptop’s code.
 - Enable **Playtest Demon volume buttons** in Accessibility settings. If blocked for a sideloaded app, use Settings → Apps → Playtest Demon → ⋮ → **Allow restricted settings**, then return to Accessibility.
 - Allow microphone access and notifications when requested.
 - Choose a game and your lookback window (10 seconds suggested).
 - Tap **Start session** and approve Android's screen-sharing prompt. Choose the whole screen when Android offers a choice.
 - Open your game. Press Volume Up to start a clip, speak about the issue, and press Volume Up again to send it.
 
-The phone tries the last reachable Mac, Bonjour on Wi-Fi, then USB (`adb reverse`). A new Wi-Fi phone requires approval on the Mac. USB connections are trusted. Clips wait on the phone if the Mac is offline, and only become sent after the Mac acknowledges the complete transfer. The last 20 sent clips remain on the phone.
+First click **Pair Android** on your Mac, then tap **Mac · tap to pair** on the phone and enter that Mac’s eight-character code. Install **0.6.1 or newer on both the Mac and Android phone**; earlier phone versions cannot safely share an office network. The phone uses Bonjour, its saved address or USB (`adb reverse`) only to locate that same pinned Mac identity. It never falls back to a colleague’s laptop. A new Wi-Fi phone still requires approval on its chosen Mac; USB approval is automatic only after the destination matches. Already addressed clips retain their original Mac when pairing changes. Old unaddressed clips are assigned only when the owner explicitly enters a pairing code. Clips wait on the phone if its paired Mac is offline, and only become sent after the Mac acknowledges the complete transfer. The last 20 sent clips remain on the phone.
 
 ## Recovery and duplicates
 
@@ -200,7 +201,7 @@ playtest-demon/
   .receiver.json          last authenticated Android contact (no pairing keys)
 ```
 
-Approved Wi-Fi phone keys are stored in `~/.config/qa-clip/devices.json`. CLI credentials remain in each CLI's own storage. **Do not commit inbox data, pairing keys, credentials, APK signing keys, or machine-specific SDK paths.** The repository's `.gitignore` excludes generated files and local configuration; your inbox needs its own backup.
+Approved Wi-Fi phone keys are stored in `~/.config/qa-clip/devices.json`. The stable per-laptop receiver identity and pairing code live in `~/.config/qa-clip/identity.json`. Preserve both during upgrades, and never copy them to a colleague’s installation or include them in a shared app/archive. CLI credentials remain in each CLI's own storage. **Do not commit inbox data, pairing keys, credentials, APK signing keys, or machine-specific SDK paths.** The repository's `.gitignore` excludes generated files and local configuration; your inbox needs its own backup.
 
 Videos are transferred locally over plain HTTP; use trusted Wi-Fi or USB. The review server only listens on loopback. **Selected frames, transcript and ticket context are sent to the chosen AI provider through its CLI**, under that provider's terms and account settings. Codex runs in its read-only sandbox; Claude gets only Read and Glob tools. Model output is validated before ticket generation. Copying a prompt leaves its tickets approved. **Send batch to agent** runs the selected fixing CLI locally and publishes changes to the connected GitHub repository as a PR; it does not create GitHub issues. Evidence is copied into an ignored run workspace for the agent and removed before the commit. Credentials are not copied into the batch. Repo scripts and verification commands run on your Mac: connect a repository you trust. See [fix-run boundaries](docs/FIX-RUNS.md). Earlier handed-off prompts remain in History and can be returned to approval.
 

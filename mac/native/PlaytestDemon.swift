@@ -154,7 +154,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any], info["app"] as? String == "playtest-demon",
                info["inbox"] as? String == self.inbox.resolvingSymlinksInPath().path { self.ready(); return }
             self.attempts += 1
-            if self.attempts > 100 { self.fail("The desk did not start within 30 seconds. Open Logs to see what needs attention."); return }
+            if self.attempts == 100 {
+                self.web.loadHTMLString("<body style='background:#0d141b;color:#edf5f6;font:17px -apple-system;padding:60px'><h1>Waiting for macOS access…</h1><p>If macOS asks, allow Playtest Demon to access your Desktop folder so it can open your inbox.</p><p>Keep this window open. Setup continues automatically after permission is granted.</p></body>", baseURL: nil)
+            }
+            if self.attempts > 1000 { self.fail("The desk is still waiting after several minutes. Approve any macOS folder-access prompt, then reopen the app. Open Logs for details."); return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.waitForService() }
         }
     }
@@ -213,7 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     @objc func openBrowser() { NSWorkspace.shared.open(deskURL) }
     @objc func openInbox() { try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true); NSWorkspace.shared.open(inbox) }
     @objc func openLogs() { NSWorkspace.shared.open(logURL.deletingLastPathComponent()) }
-    @objc func about() { NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Playtest Demon", .applicationVersion: "0.6.0", .credits: NSAttributedString(string: "Infinity Games · Speak. Review. Ship. Repeat.")]) }
+    @objc func about() { NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Playtest Demon", .applicationVersion: "0.6.1", .credits: NSAttributedString(string: "Infinity Games · Speak. Review. Ship. Repeat.")]) }
     @objc func backPage() { if web.canGoBack { web.goBack() } }
     @objc func reloadPage() {
         web.evaluateJavaScript("typeof dirty !== 'undefined' && Object.keys(dirty).length > 0") { value, _ in

@@ -11,7 +11,8 @@ Read `docs/INSTALL-AGENT.md` and follow its verification sequence. Preserve exis
 - `android/`: plain Java app, minimum Android API 29, compile SDK 36. Keep `com.infinitygames.qaclip` for compatibility with installed phones.
 - `mac/native/`: native AppKit/WebKit window and menu lifecycle. `mac/service.py` is the frozen service/receiver entry point; never invoke the frozen executable as if it were a Python interpreter.
 - `scripts/package-mac.py`: movable .app plus ZIP/DMG, embedded Python, no owner data. Verify actual bundled startup/UI/shutdown in an isolated inbox.
-- `mac/qa-inbox.py`: USB/Bonjour receiver, complete-file acknowledgement.
+- `mac/qa-inbox.py`: USB/Bonjour receiver, complete-file acknowledgement. Every phone request must target this Mac’s stable identity before auth/game/media handling. `desk_identity.py` stores it outside the repo.
+- `android/.../MacRoute.java` and `Uploader.java`: explicit per-laptop pairing, identity pinning, and per-clip destination ownership. Never fall back to another discovered Mac or silently adopt/reassign queued clips. Verify `bash scripts/check-routing.sh` with Java on PATH.
 - `mac/desk_store.py`: durable queue, ticket state and handoffs; disk mutations use its lock.
 - `mac/desk_analyst.py`: one worker, media extraction, transcription and provider adapters. Keep arrivals observable while this worker blocks.
 - `mac/desk_server.py`: loopback-only HTTP API, same-origin writes and bounded media paths.

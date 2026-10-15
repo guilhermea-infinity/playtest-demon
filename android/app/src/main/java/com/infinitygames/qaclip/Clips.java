@@ -49,6 +49,8 @@ final class Clips {
             }
             SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US);
             j.put("game", game);
+            j.put("receiverCode", Uploader.get(c).macCode());
+            j.put("receiverId", Uploader.get(c).macId());
             j.put("lookbackSeconds", r.lookbackUs / 1_000_000);
             j.put("appLabel", label != null ? label : "Unknown app");
             j.put("app", app);

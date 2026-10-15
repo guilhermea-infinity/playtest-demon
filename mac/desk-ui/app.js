@@ -958,7 +958,7 @@ function renderHealth() {
     elapsed = Date.now() / 1000 - (r.lastSeen || 0),
     live = elapsed < 30;
   $("#phoneStatus").innerHTML =
-    `<span class="dot ${live ? "" : "paused"}"></span><div><b>${live ? esc(r.device) + " · " + esc(r.transport) : r.lastSeen ? "Phone last seen " + age(elapsed) : "No phone seen yet"}</b><small>${S.flags.receiverRunning ? "Receiver ready · USB & Wi-Fi" : "Receiver off · imports still work"}${!live && r.lastSeen ? " · keep the Android session open" : ""}</small></div>`;
+    `<span class="dot ${live ? "" : "paused"}"></span><div><b>${live ? esc(r.device) + " · " + esc(r.transport) : r.lastSeen ? "Phone last seen " + age(elapsed) : "No phone seen yet"}</b><small>${S.flags.receiverRunning ? "Receiver ready · USB & Wi-Fi" : "Receiver off · imports still work"}${!live && r.lastSeen ? " · keep the Android session open" : ""}</small><button class="text-button" onclick="openPairPhone()">Pair Android · ${esc(S.flags.pairing?.code || "Show code")}</button></div>`;
   const timing = S.timing || {},
     typ = timing.typicalSeconds,
     w = S.working;
@@ -978,6 +978,10 @@ function renderHealth() {
           : "Ready for the next recording.";
   }
   $("#queueTiming").textContent = msg;
+}
+function openPairPhone() {
+  $("#pairCode").textContent = S.flags.pairing?.code || "Restart the updated Mac app";
+  $("#pairDialog").showModal();
 }
 function askAction(title, text, label, fn) {
   confirmFn = fn;

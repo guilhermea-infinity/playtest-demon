@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import desk_analyst  # noqa: E402
 import desk_runs
 import desk_server  # noqa: E402
+from desk_identity import receiver_identity
 from desk_store import Store  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -87,6 +88,7 @@ def main():
     except BlockingIOError:
         ap.error(f"Another Playtest Demon is already using {inbox}")
     store = Store(inbox)
+    store.flags['pairing'] = receiver_identity()
     config = {}
     if a.provider:
         config.update(provider=a.provider, model="")

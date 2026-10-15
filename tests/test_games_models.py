@@ -44,9 +44,9 @@ class GamesModelsTests(unittest.TestCase):
             server = ThreadingHTTPServer(('127.0.0.1', 0), inbox.make_handler(root, devices, 'Test Mac'))
             thread = threading.Thread(target=server.serve_forever); thread.start()
             url = f'http://127.0.0.1:{server.server_port}'
-            headers = {'X-QA-Key': 'a'*32, 'Content-Type': 'application/json'}
+            headers = {'X-QA-Key': 'a'*32, 'X-QA-Mac': devices.identity['id'], 'Content-Type': 'application/json'}
             try:
-                with self.assertRaises(HTTPError) as exc: urlopen(url + '/games')
+                with self.assertRaises(HTTPError) as exc: urlopen(Request(url + '/games', headers={'X-QA-Mac': devices.identity['id']}))
                 self.assertEqual(exc.exception.code, 403); exc.exception.close()
                 req = Request(url+'/games', data=json.dumps({'games':['My Game']}).encode(), headers=headers)
                 with urlopen(req) as response: self.assertEqual(json.load(response)['games'], ['My Game'])

@@ -109,8 +109,9 @@ public final class MainActivity extends Activity {
 
         LinearLayout connections = card(col);
         keysVal = row(connections, "Volume buttons", v -> openKeys());
-        macVal = row(connections, "Mac", null);
+        macVal = row(connections, "Mac · tap to pair", v -> chooseMac());
         clipsVal = row(connections, "Clips", null);
+        connections.addView(text("Pair with the code shown on YOUR laptop. Clips never switch to another Mac on the same Wi-Fi.", 12, DIM, false));
 
         LinearLayout capture = card(col);
         capture.addView(text("CAPTURE SETTINGS", 11, OK, true));
@@ -209,7 +210,7 @@ public final class MainActivity extends Activity {
         keysVal.setTextColor(keys ? OK : WARN);
 
         Uploader u = Uploader.get(this);
-        macVal.setText(u.ok ? u.state + "  ✓" : u.state);
+        macVal.setText((u.ok ? u.state + "  ✓" : u.state) + "  ›");
         macVal.setTextColor(u.ok ? OK : WARN);
 
         int n = u.waiting();
@@ -228,6 +229,31 @@ public final class MainActivity extends Activity {
                 if (which == choices.size() - 1) addGame();
                 else { Games.select(this, which == 0 ? "" : names.get(which - 1)); render(); }
             }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void chooseMac() {
+        if (CaptureService.I != null) {
+            Toast.makeText(this, "Stop the session before changing laptops. Your saved clips keep their destination.", Toast.LENGTH_LONG).show(); return;
+        }
+        Uploader uploader = Uploader.get(this);
+        EditText input = new EditText(this);
+        input.setSingleLine(true); input.setHint("ABCD-1234"); input.setTextColor(TXT);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(9)});
+        input.setText(uploader.macCode());
+        LinearLayout content = new LinearLayout(this); content.setPadding(px(24), px(12), px(24), 0);
+        content.addView(input, new LinearLayout.LayoutParams(-1, -2));
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Pair with your Mac")
+            .setMessage("On YOUR laptop, open Playtest Demon → Pair Android. Enter its code here. This phone sends only to that Mac.\n\nOld clips without a destination will go to this Mac. Clips already assigned to another Mac stay on the phone for that Mac.")
+            .setView(content).setNegativeButton("Cancel", null).setPositiveButton("Pair this Mac", null).create();
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try { uploader.chooseMac(input.getText().toString()); dialog.dismiss(); render(); }
+                catch (Exception e) { input.setError(e.getMessage()); }
+            });
+            input.requestFocus(); dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        });
+        dialog.show();
     }
 
     private void addGame() {
@@ -266,6 +292,7 @@ public final class MainActivity extends Activity {
             h.postDelayed(this::render, 300);
             return;
         }
+        if (!MacRoute.validCode(Uploader.get(this).macCode())) { chooseMac(); return; }
         if (!KeyService.on()) {
             Toast.makeText(this, "Turn on “Playtest Demon volume buttons”, then come back", Toast.LENGTH_LONG).show();
             openKeys();

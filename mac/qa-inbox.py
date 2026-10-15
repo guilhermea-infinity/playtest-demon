@@ -5,7 +5,8 @@
 
 - Wi-Fi: advertises itself with Bonjour (_qaclip._tcp), so the phone finds this Mac with no IP typing.
 - USB: runs `adb reverse` for any phone or emulator plugged in, for networks that block phone-to-Mac traffic.
-- A new phone on Wi-Fi gets a one-time "Allow?" dialog on this Mac. Phones on USB are trusted.
+- Phones first pair with this Mac’s code and pin its identity. All phone requests carry X-QA-Mac.
+- A new phone on Wi-Fi gets a one-time "Allow?" dialog on this Mac. USB trust applies only to the matched destination.
 - Clips land in ~/Desktop/QA-Inbox/<Game>/<date time>.mp4, a .json beside each, and one line per clip in
   inbox.jsonl (the list Claude reads to draft tickets).
 
@@ -30,6 +31,7 @@ from pathlib import Path
 from urllib.parse import unquote_plus
 
 from desk_games import games, game_name
+from desk_identity import receiver_identity
 
 PORT = 8799
 TYPE = "_qaclip._tcp"
@@ -66,6 +68,7 @@ class Devices:
 
     def __init__(self, path):
         self.path = path
+        self.identity = receiver_identity(path.parent / 'identity.json')
         self.lock = threading.Lock()
         self.asking = set()
         try:
@@ -153,7 +156,17 @@ def make_handler(inbox, devices, name):
                     os.replace(temp, target)
             return status, dev
 
+        def _target(self):
+            if self.headers.get('X-QA-Mac') != devices.identity['id']:
+                self._json(409, {'ok': False, 'error': 'Pair this phone with this Mac using its pairing code.', 'code': 'wrong-mac'})
+                return False
+            return True
+
         def do_GET(self):
+            if self.path == '/identity':
+                return self._json(200, {**devices.identity, 'name': name})
+            if not self._target():
+                return
             if self.path == '/games':
                 st, _ = self._who()
                 if st != 'approved':
@@ -165,6 +178,8 @@ def make_handler(inbox, devices, name):
             self._json(404, {"ok": False})
 
         def do_POST(self):
+            if not self._target():
+                return
             if self.path == '/games':
                 st, _ = self._who()
                 if st != 'approved':
@@ -197,6 +212,9 @@ def make_handler(inbox, devices, name):
                     meta = {}
             except Exception:
                 meta = {}
+
+            if meta.get('receiverId') and meta['receiverId'] != devices.identity['id']:
+                return self._json(409, {'ok': False, 'error': 'This saved clip belongs to another Mac.', 'code': 'wrong-mac'})
 
             try:
                 chosen = game_name(meta.get('game') or meta.get('appLabel') or meta.get('app') or 'Unknown app')

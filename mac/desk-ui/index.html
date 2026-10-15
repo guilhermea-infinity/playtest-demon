@@ -428,6 +428,14 @@
         <pre id="runLog">Loading…</pre>
       </details>
     </dialog>
+    <dialog id="pairDialog">
+      <div class="dialog-top"><h2>Pair Android with this Mac</h2><button aria-label="Close" onclick="$('#pairDialog').close()">✕</button></div>
+      <p>On your phone, open Playtest Demon and tap <strong>Mac · tap to pair</strong>. Enter this laptop’s code:</p>
+      <output id="pairCode" class="pair-code" aria-label="This Mac’s pairing code"></output>
+      <p>Approve the phone on this Mac if prompted. Your phone stays paired to this laptop. If it is offline, clips wait on the phone. Nearby coworkers’ Macs are never used as a fallback.</p>
+      <p class="hint">Requires Android 0.6.1 or newer. Older phone apps must be updated to use explicit pairing. A pairing code selects the destination; it does not replace the Mac’s phone approval.</p>
+      <div class="dialog-actions"><button class="btn go" onclick="$('#pairDialog').close()">Done</button></div>
+    </dialog>
     <div id="toast" role="status"></div>
     <div
       id="lightbox"
