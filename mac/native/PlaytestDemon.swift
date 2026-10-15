@@ -216,7 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     @objc func openBrowser() { NSWorkspace.shared.open(deskURL) }
     @objc func openInbox() { try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true); NSWorkspace.shared.open(inbox) }
     @objc func openLogs() { NSWorkspace.shared.open(logURL.deletingLastPathComponent()) }
-    @objc func about() { NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Playtest Demon", .applicationVersion: "0.6.1", .credits: NSAttributedString(string: "Infinity Games · Speak. Review. Ship. Repeat.")]) }
+    @objc func about() { NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Playtest Demon", .applicationVersion: "0.6.2", .credits: NSAttributedString(string: "Infinity Games · Speak. Review. Ship. Repeat.")]) }
     @objc func backPage() { if web.canGoBack { web.goBack() } }
     @objc func reloadPage() {
         web.evaluateJavaScript("typeof dirty !== 'undefined' && Object.keys(dirty).length > 0") { value, _ in

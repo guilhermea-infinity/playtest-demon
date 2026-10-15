@@ -2,10 +2,13 @@
 
 ## Connect once per game
 
-1. Clone your game repository on the Mac and sign in to the [GitHub CLI](https://cli.github.com/manual/gh_auth_login): `gh auth login`. Private HTTPS clones need Git credential access; use `gh auth setup-git` if Git does not already have it.
-2. In Playtest Demon, select the game and click **Connect game repository**. Enter the local repository root, its GitHub base branch (blank uses `origin/HEAD`), and the command that verifies a fresh clone. Examples: `npm ci && npm test`, or `python3 -m pip install -r requirements.txt && python3 -m pytest`. The command runs on this Mac; it must install required dependencies and exit nonzero on failure.
-3. Choose Codex CLI or Claude Code, a model/default and its supported reasoning effort. These fixing settings are separate from the video analyst. The desk verifies the local repository and GitHub access before saving.
-4. Leave automatic merge off for the first batch. Enable it per game once the repository has required checks, branch protection and GitHub auto-merge configured. Never use automatic merge as a substitute for meaningful tests.
+1. Sign in to the [GitHub CLI](https://cli.github.com/manual/gh_auth_login) once: `gh auth login`. Your account needs write access to the game repository.
+2. In Playtest Demon, select the game and click **Connect GitHub repository** (or **Connect repository** on its approved batch). Paste the GitHub URL or `owner/repository`, then click **Check repository**. A local clone is optional; you can still paste an existing repository root.
+3. Review the detected starting branch, suggested project checks and fixing agent. For npm projects, the desk reads `package.json` and the lockfile to suggest dependency setup, build and test/QA scripts. Playwright projects also get Chromium setup. Unknown project types open **Agent & advanced settings** so you can enter your own verification command. A build-only check is clearly labelled; it is not a gameplay test.
+4. New connections start with your current analyst’s chosen CLI/model/effort. Change these under **Agent & advanced settings** if you want a separate fixing model. Saved explicit models/efforts are preserved when catalog discovery is unavailable. Automatic merge starts off; enable it only once required checks and branch protection are configured.
+5. Click **Connect game**. This saves the setup only. Nothing is cloned, edited, executed or submitted during GitHub-link inspection/connection. The desk reads GitHub metadata/project files and verifies access. Existing local-folder inputs are read to identify their GitHub origin. The verification command executes later, after you send an approved batch.
+
+The connection belongs to this game in your local inbox. Each tester configures their own repository access and AI CLI login. During a batch the desk uses its GitHub CLI credential helper per Git operation; it does not change global Git configuration or copy a token into the game checkout.
 
 ## The loop
 
@@ -38,4 +41,4 @@ Build/install the new game build using that game’s normal workflow. The desk d
 
 After a desk restart, interrupted coding work is never automatically re-executed. Inspect its log and saved changes. If there is an unchanged verified commit, **Recover publication** pushes the same branch and reuses its existing PR. Otherwise, **Return tickets to batch**, clarify the request/check command and start a fresh run. No failed run is labeled fixed. Long agent runs time out after 30 minutes; verification after 15 minutes.
 
-The batch runner and video analyst are independent single workers. Pausing video analysis does not pause a coding run; use Cancel run for that. Keeping Terminal open and the Mac awake is required. Logs and run folders remain in the inbox and need their own backup/disk management.
+The batch runner and video analyst are independent single workers. Pausing video analysis does not pause a coding run; use Cancel run for that. Keep Playtest Demon running and the Mac awake. Closing its Mac window keeps the service running; Cmd+Q stops it. For source launches, keep Terminal open. Logs and run folders remain in the inbox and need their own backup/disk management.

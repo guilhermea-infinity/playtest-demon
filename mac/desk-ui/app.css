@@ -1875,3 +1875,17 @@ dd {
     animation: none;
   }
 }
+.repo-source-row {display:flex; align-items:stretch; gap:10px; margin-top:8px}
+.repo-source-row input {flex:1; min-width:0; margin:0!important}
+.repo-source-row .btn {flex:none}
+.repo-connection-preview {margin:20px 0; padding:20px; border:1px solid #86ded455; border-radius:12px; background:#86ded409}
+.repo-connection-preview h3 {overflow-wrap:anywhere}
+.repo-connection-facts {display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; margin:20px 0}
+.repo-connection-facts div {min-width:0}
+.repo-connection-facts div:last-child {grid-column:1/-1}
+.repo-connection-facts small {display:block; font-size:10px; letter-spacing:1px; margin-bottom:7px}
+.repo-connection-facts b {display:block; font-size:14px; overflow-wrap:anywhere}
+.repo-advanced {padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+.repo-advanced summary {color:var(--green); cursor:pointer; font-weight:600}
+#repoProgress {margin-top:12px}
+@media(max-width:620px){.repo-source-row{flex-direction:column}.repo-source-row .btn{width:100%}.repo-connection-facts{grid-template-columns:minmax(0,1fr)}.repo-connection-facts div:last-child{grid-column:auto}}

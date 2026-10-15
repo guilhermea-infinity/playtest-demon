@@ -4,6 +4,7 @@ Credentials are not copied into a batch workspace. The desk owns publication and
 Runs and snapshots are durable; interrupted runs require an explicit retry (no duplicate PR on restart).
 """
 import copy
+import base64
 import json
 import os
 import re
@@ -26,7 +27,10 @@ SCHEMA = {'type': 'object', 'properties': {'summary': {'type': 'string'}, 'addre
 
 
 def command(args, cwd=None, timeout=120):
-    r = subprocess.run(args, cwd=cwd, text=True, capture_output=True, timeout=timeout, env=child_env())
+    try:
+        r = subprocess.run(args, cwd=cwd, text=True, capture_output=True, timeout=timeout, env=child_env())
+    except subprocess.TimeoutExpired:
+        raise ValueError(f'{args[0]} took too long. Check the connection and retry.') from None
     if r.returncode:
         raise ValueError((r.stderr or r.stdout).strip()[-1200:] or f'{args[0]} failed')
     return r.stdout.strip()
@@ -50,6 +54,72 @@ def inspect_repo(path):
         info = json.loads(command(['gh', 'repo', 'view', slug, '--json', 'defaultBranchRef'], root))
         base = info['defaultBranchRef']['name']
     return {'path': str(root), 'github': slug, 'base': base}
+
+
+def github_slug(source):
+    value = str(source).strip().rstrip('/')
+    match = re.fullmatch(r'(?:https://github.com/|git@github.com:)?([A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+?)(?:\.git)?', value)
+    if not match or any(part in ('.', '..') for part in match.group(1).split('/')):
+        raise ValueError('Paste the GitHub repository link, for example https://github.com/your-team/your-game')
+    return match.group(1)
+
+
+def suggested_check(package):
+    scripts = package.get('scripts', {})
+    if not isinstance(scripts, dict):
+        return {'testCommand': '', 'checkLabel': 'Add a project check', 'checkNote': 'No supported build/test script was detected. Open advanced settings to add the command your team uses.'}
+    steps = ['npm ci' if package.get('_hasLockfile') else 'npm install']
+    deps = {}
+    for field in ('dependencies', 'devDependencies'):
+        if isinstance(package.get(field), dict): deps.update(package[field])
+    if 'playwright' in deps or '@playwright/test' in deps:
+        steps.append('npx playwright install chromium')
+    if scripts.get('build'):
+        steps.append('npm run build')
+    if scripts.get('qa'):
+        steps.append('npm run qa'); label = 'Build + game QA' if scripts.get('build') else 'Game QA'
+    elif scripts.get('test') and 'no test specified' not in str(scripts['test']).lower():
+        steps.append('npm test'); label = 'Build + tests' if scripts.get('build') else 'Project tests'
+    elif scripts.get('build'):
+        label = 'Build check'
+    else:
+        return {'testCommand': '', 'checkLabel': 'Add a project check', 'checkNote': 'No supported build/test script was detected. Open advanced settings to add the command your team uses.'}
+    return {'testCommand': ' && '.join(steps), 'checkLabel': label,
+            'checkNote': 'Suggested from package.json. Runs only when you send an approved batch.' + (' This checks the build only; add gameplay tests for more coverage.' if label == 'Build check' else '')}
+
+
+def preview_repository(source):
+    source = str(source).strip()
+    if len(source) > 2048:
+        raise ValueError('Use a GitHub repository link or local folder')
+    local = inspect_repo(source) if source and Path(source).expanduser().is_dir() else None
+    slug = local['github'] if local else github_slug(source)
+    info = json.loads(command(['gh', 'repo', 'view', slug, '--json', 'nameWithOwner,defaultBranchRef,viewerPermission,isArchived,isEmpty'], timeout=30))
+    if info.get('isArchived') or info.get('isEmpty'):
+        raise ValueError('Choose a repository with code that is not archived')
+    if info.get('viewerPermission') not in ('ADMIN', 'MAINTAIN', 'WRITE'):
+        raise ValueError('Your GitHub account needs write access to open fixing branches in this repository')
+    slug = info['nameWithOwner']
+    branch = info['defaultBranchRef']['name']
+    package = {}
+    # Inspect files only. Connecting never executes scripts from the game repository.
+    try:
+        entries = json.loads(command(['gh', 'api', f'repos/{slug}/contents?ref={quote(branch, safe="")}'], timeout=30))
+        names = {entry['name'] for entry in entries if entry.get('type') == 'file'}
+        if 'package.json' in names:
+            entry = json.loads(command(['gh', 'api', f'repos/{slug}/contents/package.json?ref={quote(branch, safe="")}'], timeout=30))
+            package = json.loads(base64.b64decode(entry['content']))
+            if not isinstance(package, dict): package = {}
+            package['_hasLockfile'] = 'package-lock.json' in names
+    except (ValueError, KeyError, TypeError):
+        pass  # Unknown projects keep the explicit custom-check path; never claim they have tests.
+    return {'github': slug, 'path': local['path'] if local else '', 'base': branch,
+            'url': 'https://github.com/' + slug, 'access': info['viewerPermission'], **suggested_check(package)}
+
+
+def github_git(args):
+    # Use the owner's gh login for THIS invocation, without changing global Git config or copying a token.
+    return ['git', '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential', *args]
 
 
 class Runs(threading.Thread):
@@ -97,11 +167,11 @@ class Runs(threading.Thread):
     def configure(self, game, fields):
         if game not in self.store.state()['games']:
             raise ValueError('Choose a game first')
-        repo = inspect_repo(str(fields.get('path', '')))
+        repo = preview_repository(str(fields.get('source') or fields.get('path') or fields.get('github') or ''))
         base = str(fields.get('base') or repo['base'])
         if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,150}', base) or '..' in base:
             raise ValueError('Use a valid base branch')
-        test = str(fields.get('testCommand', '')).strip()
+        test = str(fields.get('testCommand') or repo.get('testCommand') or '').strip()
         if not test or len(test) > 2000:
             raise ValueError('Add the test command that verifies this game (for example npm test)')
         provider = fields.get('provider', self.store.config()['provider'])
@@ -115,7 +185,10 @@ class Runs(threading.Thread):
         if not isinstance(auto, bool):
             raise ValueError('Auto merge must be true or false')
         # gh remains outside the agent sandbox; verify access now, before any batch is consumed.
-        command(['gh', 'repo', 'view', repo['github'], '--json', 'name'], repo['path'])
+        if base != repo['base']:
+            command(['gh', 'api', 'repos/' + repo['github'] + '/branches/' + quote(base, safe='')], timeout=20)
+        if test != repo.get('testCommand'):
+            repo.update(checkLabel='Custom project check', checkNote='Uses your verification command.')
         repo.update(base=base, testCommand=test, provider=provider, model=model, effort=effort, autoMerge=auto)
         with self.store.lock:
             repos = read_json(self.store.root / 'repositories.json', {})
@@ -228,7 +301,7 @@ class Runs(threading.Thread):
                 return
             self.update(rid, status='preparing' , startedAt=time.time())
             # Clone the remote base: never carry an owner's unstaged edits into a batch.
-            self.execute(rid, ['git', 'clone', '--single-branch', '--branch', repo['base'], 'https://github.com/' + repo['github'] + '.git', str(clone)], folder, timeout=300)
+            self.execute(rid, github_git(['clone', '--single-branch', '--branch', repo['base'], 'https://github.com/' + repo['github'] + '.git', str(clone)]), folder, timeout=300)
             command(['git', 'checkout', '-b', r['branch']], clone)
             original = command(['git', 'rev-parse', 'HEAD'], clone)
             # Copy only approved evidence and its linked duplicates into this workspace.
@@ -304,7 +377,7 @@ class Runs(threading.Thread):
         rid, repo, result = r['id'], r['repository'], r['result']
         folder, clone = self.root / rid, self.root / rid / 'repo'
         self.update(rid, status='publishing')
-        self.execute(rid, ['git', 'push', 'origin', 'HEAD:refs/heads/' + r['branch']], clone, timeout=180)
+        self.execute(rid, github_git(['push', 'origin', 'HEAD:refs/heads/' + r['branch']]), clone, timeout=180)
         body = folder / 'pr.md'
         body.write_text(result['summary'] + '\n\nApproved playtest tickets: ' + ', '.join(r['tickets']) + '\n\nValidation: `' + repo['testCommand'] + '` passed.\n\n' + result['notes'] + '\n\nPlaytest Demon batch: ' + rid)
         # If a response is lost, lookup before create prevents two PRs on one branch.

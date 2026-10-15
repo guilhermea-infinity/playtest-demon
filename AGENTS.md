@@ -16,7 +16,7 @@ Read `docs/INSTALL-AGENT.md` and follow its verification sequence. Preserve exis
 - `mac/desk_store.py`: durable queue, ticket state and handoffs; disk mutations use its lock.
 - `mac/desk_analyst.py`: one worker, media extraction, transcription and provider adapters. Keep arrivals observable while this worker blocks.
 - `mac/desk_server.py`: loopback-only HTTP API, same-origin writes and bounded media paths.
-- `mac/desk_runs.py`: approved batch reservations, isolated clones, provider execution, verified publication and protected merge. Never silently retry an interrupted agent run or bypass failed checks.
+- `mac/desk_runs.py`: approved batch reservations, isolated clones, provider execution, verified publication and protected merge. Repository setup accepts a GitHub URL or optional local clone and only reads metadata/manifests; never execute project scripts during connection. Never silently retry an interrupted agent run or bypass failed checks.
 - `mac/desk_import.py`: bounded streaming MOV/MP4 imports with audio, conversion and exact-file deduplication.
 - `mac/desk-ui/playtest.*`: standalone browser screen/microphone recorder with overlapping complete containers for lookback. Keep screen sharing owner-consented; never treat arbitrary MediaRecorder timeslices as independent video files. Browser upload timing is validated and trimmed by `desk_import.py`.
 - `mac/desk-ui/`: dependency-free browser UI. Preserve in-progress edits and playback across polling.

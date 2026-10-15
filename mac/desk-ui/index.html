@@ -352,69 +352,30 @@
     </dialog>
     <dialog id="repoDialog">
       <form onsubmit="event.preventDefault();saveRepo()">
-        <div class="dialog-top">
-          <h2 id="repoTitle">Connect your game</h2>
-          <button
-            type="button"
-            aria-label="Close"
-            onclick="$('#repoDialog').close()"
-          >
-            ✕
-          </button>
+        <div class="dialog-top"><h2 id="repoTitle">Connect your game</h2><button type="button" aria-label="Close" onclick="$('#repoDialog').close()">✕</button></div>
+        <p>Choose the game’s GitHub repository once. When you send approved requests, your agent works in a separate branch and opens a pull request for you.</p>
+        <label for="repoGame">Game</label><select id="repoGame" onchange="fillRepo()"></select>
+        <label for="repoSource">GitHub repository</label>
+        <div class="repo-source-row"><input id="repoSource" placeholder="https://github.com/your-team/your-game" autocomplete="off" oninput="repoChanged()"/><button type="button" class="btn" id="repoCheck" onclick="checkRepository()">Check repository</button></div>
+        <p class="hint">Paste a link or owner/repository. An existing local repository folder also works. Uses your GitHub CLI sign-in.</p>
+        <p id="repoProgress" class="hint" role="status"></p>
+        <div id="repoPreview" class="repo-connection-preview" hidden>
+          <div class="eyebrow">GITHUB ACCESS VERIFIED</div><h3 id="repoSummaryName"></h3>
+          <div class="repo-connection-facts"><div><small>START FROM</small><b id="repoSummaryBranch"></b></div><div><small>CHECK THE FIXES</small><b id="repoSummaryCheck"></b></div><div><small>FIXING AGENT</small><b id="repoSummaryAgent"></b></div></div>
+          <p id="repoCheckNote" class="hint"></p>
         </div>
-        <p>
-          The agent starts from GitHub’s base branch in a fresh local clone.
-          Your working checkout stays separate. The desk creates the branch and
-          PR using your existing GitHub login.
-        </p>
-        <label for="repoGame">Game</label
-        ><select id="repoGame" onchange="fillRepo()"></select
-        ><label for="repoPath">Local repository folder</label
-        ><input
-          id="repoPath"
-          placeholder="/Users/you/Projects/my-game"
-          required
-        /><label for="repoBase">Base branch</label
-        ><input
-          id="repoBase"
-          placeholder="Remote default (usually main)"
-        /><label for="repoTest">Verification command</label
-        ><input id="repoTest" placeholder="e.g. npm ci && npm test" required />
-        <p class="hint">
-          Runs in each fresh clone. Include dependency setup if the project
-          needs it. No PR is published if this command fails.
-        </p>
-        <div class="form-grid">
-          <div>
-            <label for="repoProvider">Fixing agent</label
-            ><select id="repoProvider" onchange="repoModels()">
-              <option value="claude">Claude Code</option>
-              <option value="codex">Codex CLI</option>
-            </select>
-          </div>
-          <div>
-            <label for="repoModel">Model</label
-            ><select id="repoModel" onchange="repoEfforts()"></select>
-          </div>
-        </div>
-        <label for="repoEffort">Reasoning effort</label
-        ><select id="repoEffort"></select>
-        <p id="repoModelInfo" class="hint"></p>
-        <label class="check-label"
-          ><input id="repoAuto" type="checkbox" /> Queue PRs to merge
-          automatically</label
-        >
-        <p class="hint">
-          Opt in for this game. Requires GitHub checks, branch protection and
-          repository auto-merge. Stops on failing checks or changed PR commits.
-          Otherwise, review the PR and queue its merge from Fix runs.
-        </p>
-        <p id="repoError" class="fail" role="status"></p>
-        <div class="dialog-actions">
-          <button type="button" class="btn" onclick="$('#repoDialog').close()">
-            Cancel</button
-          ><button id="repoSave" class="btn go">Connect repository</button>
-        </div>
+        <details id="repoAdvanced" class="repo-advanced"><summary>Agent & advanced settings</summary>
+          <label for="repoBase">Starting branch</label><input id="repoBase" placeholder="Repository default" oninput="repoSummary()"/>
+          <label for="repoTest">Verification command</label><textarea id="repoTest" rows="3" placeholder="Your project’s build and test command" oninput="repoActions();repoSummary()"></textarea>
+          <p class="hint">Suggested from the repository’s scripts. Runs on your Mac after the agent edits the game. Failed checks stop the PR. You can change it to your team’s usual checks.</p>
+          <div class="form-grid"><div><label for="repoProvider">Fixing agent</label><select id="repoProvider" onchange="repoModels()"><option value="claude">Claude Code</option><option value="codex">Codex CLI</option></select></div><div><label for="repoModel">Model</label><select id="repoModel" onchange="repoEfforts()"></select></div></div>
+          <label for="repoEffort">Reasoning effort</label><select id="repoEffort" onchange="repoSummary()"></select><p id="repoModelInfo" class="hint"></p>
+          <label class="check-label"><input id="repoAuto" type="checkbox"/> Automatically queue PRs to merge after required GitHub checks</label>
+          <p class="hint">Off by default: review the PR yourself. Automatic merge requires branch protection, required checks and GitHub auto-merge.</p>
+        </details>
+        <p id="repoError" class="fail" role="alert"></p>
+        <div class="dialog-actions"><button type="button" class="btn" onclick="$('#repoDialog').close()">Cancel</button><button id="repoSave" class="btn go" disabled>Connect game</button></div>
+        <p class="hint">Connecting saves the setup. Start the agent later with “Send batch to agent” in Approved batches.</p>
       </form>
     </dialog>
     <dialog id="runDialog">

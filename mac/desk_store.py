@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 import desk_handoff
-from desk_games import games
+from desk_games import games, game_name
 from desk_models import validate_effort
 
 KINDS = ("bug", "change", "polish", "crash", "idea")
@@ -86,6 +86,47 @@ class Store:
               {c['meta'].get('game') or c['meta'].get('appLabel') or c['meta'].get('app') for c in self.clips.values() if c.get('meta') and (c['meta'].get('game') or c['meta'].get('appLabel') or c['meta'].get('app'))})
 
     # ---- clips ----
+
+    def rename_game(self, old, new):
+        old, new = game_name(old), game_name(new)
+        with self.lock:
+            self.sync_inbox()
+            if old == new:
+                return {'game': new, 'clips': 0, 'tickets': 0}
+            if old not in games(self.inbox):
+                if new in games(self.inbox): return {'game': new, 'clips': 0, 'tickets': 0}
+                raise ValueError('Choose an existing game')
+            affected = {rel: c for rel, c in self.clips.items() if (c.get('meta', {}).get('game') or c.get('meta', {}).get('appLabel') or c.get('meta', {}).get('app') or rel.split('/')[0]) == old}
+            if any(c.get('status') == 'working' for c in affected.values()):
+                raise ValueError('Let this game’s current analysis finish before renaming it')
+            active = {'queued', 'preparing', 'fixing', 'testing', 'publishing', 'recovering', 'failed', 'interrupted', 'pr_ready', 'merge_queued'}
+            if any(r.get('game') == old and r.get('status') in active for r in read_json(self.root / 'runs.json', [])):
+                raise ValueError('Finish or return this game’s active fixing batch before renaming it')
+            repos = read_json(self.root / 'repositories.json', {})
+            if old in repos and new in repos and repos[old] != repos[new]:
+                raise ValueError('The destination game already has a different repository connection')
+            tickets = {tid: t for tid, t in self.tickets.items() if t.get('game') == old}
+            sidecars = {}
+            for rel in affected:
+                path = (self.inbox / rel).resolve().with_suffix('.json')
+                if self.inbox.resolve() in path.parents and path.is_file():
+                    meta = read_json(path, None)
+                    if not isinstance(meta, dict):
+                        raise ValueError('A recording’s metadata is unreadable. Restore it before renaming the game.')
+                    sidecars[str(path.relative_to(self.inbox.resolve()))] = meta
+            backup = self.root / 'Game renames'; backup.mkdir(exist_ok=True)
+            write_json(backup / (str(time.time_ns()) + '.json'), {'from': old, 'to': new, 'clips': affected, 'tickets': tickets, 'sidecars': sidecars, 'repositories': repos})
+            for rel, c in affected.items(): c.setdefault('meta', {})['game'] = new
+            for rel, meta in sidecars.items():
+                meta['game'] = new; write_json(self.inbox / rel, meta)
+            for t in tickets.values():
+                t['game'] = new; self.save_ticket(t)
+            if old in repos:
+                repos[new] = repos.pop(old); write_json(self.root / 'repositories.json', repos)
+            self._save_clips()
+            games(self.inbox, [new], rename=(old, new))
+            self.flags.setdefault('renamedGames', {})[old] = new
+            return {'game': new, 'clips': len(affected), 'tickets': len(tickets)}
 
     def _save_clips(self):
         write_json(self.root / "clips.json", self.clips)

@@ -99,7 +99,8 @@ class WorkflowTests(unittest.TestCase):
         source,remote=self.prepare_remote(); r=self.runner.submit('Game',['GA-001'])
         real_execute=self.runner.execute
         def execute(rid,args,cwd,**kw):
-            if args[:2]==['git','clone']: args=[*args[:5],str(remote),args[-1]]
+            if args[0]=='git' and 'clone' in args:
+                args=[*args[:-2],str(remote),args[-1]]
             return real_execute(rid,args,cwd,**kw)
         def agent(rid,clone,prompt,config):
             self.assertIn('GA-001',prompt)

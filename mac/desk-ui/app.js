@@ -138,7 +138,7 @@ function render() {
   $("#repoShortcut").textContent =
     selectedGame && S.repositories?.[selectedGame]
       ? "↗ " + S.repositories[selectedGame].github
-      : "Connect game repository ↗";
+      : "Connect GitHub repository ↗";
   $("#reviewCTA").textContent = nd ? `(${nd}) →` : "→";
   $("#engineLabel").textContent =
     (S.settings.provider === "codex" ? "Codex" : "Claude") +
@@ -319,6 +319,9 @@ function closeClip() {
 }
 $("#clipDialog").addEventListener("close", () => $("#clipVideo").pause());
 function renderGames() {
+  if (S.flags.renamedGames?.[selectedGame]) {
+    selectedGame = S.flags.renamedGames[selectedGame]; localStorage.setItem("qa-game", selectedGame);
+  }
   const names = [
     ...new Set([
       ...(S.games || []),
@@ -1191,33 +1194,79 @@ async function importRecording() {
   };
   xhr.send(file);
 }
+let repoInspection = null, repoChecking = false, repoSaving = false, repoModelLoading = false, repoInspectRequest = 0;
+function repoActions() {
+  const checked = repoInspection && repoInspection.source === $("#repoSource").value.trim() && repoInspection.game === $("#repoGame").value;
+  $("#repoSave").disabled = !checked || repoChecking || repoSaving || repoModelLoading || !$("#repoTest").value.trim();
+  $("#repoCheck").disabled = !$("#repoGame").value || !$("#repoSource").value.trim() || repoChecking || repoSaving;
+  $("#repoCheck").textContent = repoChecking ? "Checking GitHub…" : "Check repository";
+  $("#repoSave").textContent = repoSaving ? "Connecting…" : "Connect game";
+  for (const id of ["repoSource", "repoGame", "repoBase", "repoTest", "repoProvider", "repoAuto"]) $("#" + id).disabled = repoSaving;
+  $("#repoModel").disabled = repoSaving || repoModelLoading;
+  const model = repoCatalog.find((m) => m.id === $("#repoModel").value);
+  $("#repoEffort").disabled = repoSaving || (!model?.efforts?.length && !$("#repoEffort").value);
+}
+function repoChanged() {
+  ++repoInspectRequest; repoInspection = null; repoChecking = false;
+  $("#repoPreview").hidden = true; $("#repoError").textContent = ""; $("#repoProgress").textContent = "";
+  repoActions();
+}
+function repoSummary() {
+  if (!repoInspection) return;
+  const repo = repoInspection.repo;
+  $("#repoSummaryName").textContent = repo.github;
+  $("#repoSummaryBranch").textContent = $("#repoBase").value.trim() || repo.base;
+  $("#repoSummaryCheck").textContent = $("#repoTest").value.trim() === repo.testCommand ? repo.checkLabel || "Project checks" : "Custom project check";
+  $("#repoCheckNote").textContent = repo.checkNote || "Your verification command runs after each fixing batch.";
+  const model = $("#repoModel").selectedOptions[0]?.textContent || "CLI configured default";
+  $("#repoSummaryAgent").textContent = ($("#repoProvider").value === "codex" ? "Codex · " : "Claude · ") + model + ($("#repoEffort").value ? " · " + $("#repoEffort").value : "");
+}
 async function connectRepo(game = selectedGame) {
-  if (!S.games?.length) {
-    addGameOpen();
-    return;
-  }
-  $("#repoGame").innerHTML = S.games
-    .map((g) => `<option value="${esc(g)}">${esc(g)}</option>`)
-    .join("");
+  if (!S.games?.length) { addGameOpen(); return; }
+  $("#repoGame").innerHTML = '<option value="">Choose a game…</option>' + S.games.map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
   if (game) $("#repoGame").value = game;
   $("#repoDialog").showModal();
   await fillRepo();
 }
 async function fillRepo() {
-  const game = $("#repoGame").value,
-    r = S.repositories?.[game] || {};
-  $("#repoTitle").textContent = "Connect " + game;
-  $("#repoPath").value = r.path || "";
-  $("#repoBase").value = r.base || "";
-  $("#repoTest").value = r.testCommand || "";
-  $("#repoAuto").checked = !!r.autoMerge;
-  $("#repoProvider").value = r.provider || S.settings.provider;
-  $("#repoError").textContent = "";
-  await repoModels(r.model || "", r.effort || "");
+  ++repoInspectRequest; repoChecking = false; repoSaving = false;
+  const game = $("#repoGame").value, r = S.repositories?.[game];
+  $("#repoTitle").textContent = game ? "Connect " + game : "Connect your game";
+  $("#repoSource").value = r?.github ? "https://github.com/" + r.github : "";
+  $("#repoBase").value = r?.base || "";
+  $("#repoTest").value = r?.testCommand || "";
+  $("#repoAuto").checked = !!r?.autoMerge;
+  $("#repoProvider").value = r?.provider || S.settings.provider;
+  $("#repoError").textContent = ""; $("#repoProgress").textContent = "";
+  $("#repoAdvanced").open = false;
+  repoInspection = r ? {source: $("#repoSource").value, game, repo: r} : null;
+  $("#repoPreview").hidden = !r;
+  repoActions();
+  await repoModels(r ? r.model : S.settings.model, r ? r.effort : S.settings.effort);
+  repoSummary();
+}
+async function checkRepository() {
+  const source = $("#repoSource").value.trim(), game = $("#repoGame").value, request = ++repoInspectRequest;
+  if (!source || !game || repoSaving) return;
+  repoChecking = true; repoInspection = null; $("#repoPreview").hidden = true;
+  $("#repoError").textContent = ""; $("#repoProgress").textContent = "Checking GitHub access and finding the game’s build/test scripts…";
+  repoActions();
+  try {
+    const response = await api("/api/repository/inspect", {source});
+    if (request !== repoInspectRequest || source !== $("#repoSource").value.trim() || game !== $("#repoGame").value) return;
+    const repo = response.result;
+    repoInspection = {source, game, repo};
+    $("#repoBase").value = repo.base; $("#repoTest").value = repo.testCommand || "";
+    $("#repoPreview").hidden = false; $("#repoProgress").textContent = repo.testCommand ? "Ready. Review the setup, then connect this game." : "One more step: add your project’s verification command below.";
+    if (!repo.testCommand) $("#repoAdvanced").open = true;
+    repoSummary();
+  } catch (e) {
+    if (request === repoInspectRequest) { $("#repoError").textContent = e.message; $("#repoProgress").textContent = ""; }
+  } finally { if (request === repoInspectRequest) { repoChecking = false; repoActions(); } }
 }
 async function repoModels(model = "", effort = "") {
   const request = ++repoRequest;
-  $("#repoSave").disabled = true;
+  repoModelLoading = true; repoActions();
   $("#repoModel").disabled = true;
   $("#repoModelInfo").textContent = "Reading the installed CLI catalog…";
   try {
@@ -1242,12 +1291,13 @@ async function repoModels(model = "", effort = "") {
     repoCatalog = [];
     $("#repoModel").innerHTML =
       '<option value="">CLI configured default</option>';
-    repoEfforts();
+    if (model) { $("#repoModel").add(new Option(model + " · saved", model)); $("#repoModel").value = model; }
+    repoEfforts(effort);
     $("#repoModelInfo").textContent =
-      "Catalog unavailable. CLI default is available; refresh settings later.";
+      "Catalog unavailable. Your chosen model is preserved; refresh settings later.";
   } finally {
     if (request === repoRequest) {
-      $("#repoSave").disabled = false;
+      repoModelLoading = false; repoActions(); repoSummary();
       $("#repoModel").disabled = false;
     }
   }
@@ -1260,31 +1310,28 @@ function repoEfforts(selected = "") {
       .map((e) => `<option value="${e}">${e}</option>`)
       .join("");
   $("#repoEffort").disabled = !m?.efforts?.length;
+  if (selected && !(m?.efforts || []).includes(selected)) {
+    $("#repoEffort").add(new Option(selected + " · saved, verify", selected)); $("#repoEffort").disabled = false;
+  }
   $("#repoEffort").value = selected;
+  repoSummary();
 }
 async function saveRepo() {
-  const b = $("#repoSave");
-  b.disabled = true;
-  $("#repoError").textContent = "Verifying the local clone and GitHub access…";
+  if (!repoInspection || repoSaving || repoChecking || repoModelLoading) return;
+  const source = $("#repoSource").value.trim(), game = $("#repoGame").value;
+  if (source !== repoInspection.source || game !== repoInspection.game) { repoChanged(); return; }
+  repoSaving = true; repoActions();
+  $("#repoError").textContent = ""; $("#repoProgress").textContent = "Saving the game’s repository connection…";
   try {
     await api("/api/repository", {
-      game: $("#repoGame").value,
-      path: $("#repoPath").value.trim(),
-      base: $("#repoBase").value.trim(),
-      testCommand: $("#repoTest").value.trim(),
-      provider: $("#repoProvider").value,
-      model: $("#repoModel").value,
-      effort: $("#repoEffort").value,
-      autoMerge: $("#repoAuto").checked,
+      game, source, base: $("#repoBase").value.trim(), testCommand: $("#repoTest").value.trim(),
+      provider: $("#repoProvider").value, model: $("#repoModel").value,
+      effort: $("#repoEffort").value, autoMerge: $("#repoAuto").checked,
     });
-    $("#repoDialog").close();
-    await poll();
-    toast("Repository connected. Approved batches can now run.");
-  } catch (e) {
-    $("#repoError").textContent = e.message;
-  } finally {
-    b.disabled = false;
-  }
+    $("#repoDialog").close(); await poll();
+    toast("Repository connected. Send approved requests when you’re ready.");
+  } catch (e) { $("#repoError").textContent = e.message; $("#repoProgress").textContent = ""; }
+  finally { repoSaving = false; repoActions(); }
 }
 async function sendBatch(i) {
   if (batchBusy) return;
