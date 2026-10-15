@@ -149,7 +149,9 @@ nav {
   gap: 7px;
 }
 nav button {
-  display: flex;
+  display: grid;
+  grid-template-columns: 19px minmax(0, 1fr) auto;
+  min-width: 0;
   align-items: center;
   gap: 12px;
   border: 0;
@@ -160,10 +162,16 @@ nav button {
   font-weight: 500;
   white-space: nowrap;
 }
-nav button > span {
+nav .nav-icon {
   font-size: 18px;
   width: 19px;
   text-align: center;
+}
+nav .nav-label {
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 nav button.on {
   background: #263b46;
@@ -171,6 +179,7 @@ nav button.on {
 }
 nav b {
   margin-left: auto;
+  white-space: nowrap;
   background: #243442;
   color: var(--dim);
   border-radius: 6px;
@@ -1584,12 +1593,17 @@ dd {
     overflow: auto;
   }
   nav button {
+    grid-template-columns: minmax(0, 1fr) auto;
+    flex-shrink: 0;
     padding: 11px 10px;
     font-size: 11px;
     gap: 6px;
   }
-  nav button > span {
+  nav .nav-icon {
     display: none;
+  }
+  nav .nav-label {
+    white-space: nowrap;
   }
   nav b {
     font-size: 9px;
