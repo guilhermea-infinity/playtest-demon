@@ -55,7 +55,8 @@ def start_inbox(inbox):
         raise RuntimeError("Port 8799 is occupied. Stop the existing receiver, or use --no-inbox after confirming it writes to this inbox.")
     command = [sys.executable, "--receiver"] if getattr(sys, "frozen", False) else [sys.executable, "-u", str(HERE / "qa-inbox.py")]
     p = subprocess.Popen([*command, "--inbox", str(inbox)],
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True,
+                         env={**os.environ, "PLAYTEST_DEMON_DESK_PID": str(os.getpid())})
 
     def pump():
         for line in p.stdout:

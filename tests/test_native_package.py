@@ -16,6 +16,7 @@ class NativePackageTests(unittest.TestCase):
             desk.start_inbox(Path('/tmp/synthetic-inbox'))
             self.assertEqual(start.call_args.args[0],['/App/service','--receiver','--inbox','/tmp/synthetic-inbox'])
             self.assertTrue(start.call_args.kwargs['start_new_session'])
+            self.assertEqual(start.call_args.kwargs['env']['PLAYTEST_DEMON_DESK_PID'], str(desk.os.getpid()))
 
     def test_source_receiver_keeps_python_script_mode(self):
         fake=MagicMock();fake.stdout=[]

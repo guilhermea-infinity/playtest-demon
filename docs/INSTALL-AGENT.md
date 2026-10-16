@@ -126,6 +126,7 @@ Give the owner the repository path, inbox path, chosen CLI/model, exact launch c
 | Missing CLI / sign-in banner | Run the selected CLI's login command in Terminal; make sure it is on PATH. Queue checks again automatically. |
 | Model failure or usage limit | Read the card's error; choose a valid vision model or wait for account quota, then Retry. |
 | No spoken quote | Check mic permission, `whisper-cli`, its model, and `QA_WHISPER_MODEL`. |
+| App exits because port 8799 is occupied | Identify the listener and its exact inbox/parent before acting. Stop only a confirmed orphan receiver for this inbox; never kill an unrelated service. Upgrade to 0.6.5+ so managed receivers exit if their desk disappears. |
 | No USB arrival | Mac/Android 0.6.1+, correct pairing code, `adb devices`, cable/authorization, receiver port 8799, `adb -s SERIAL reverse tcp:8799 tcp:8799`. |
 | No Wi-Fi arrival | Correct pairing code and Mac/Android 0.6.1+, same trusted network, Mac firewall approval, phone-approval dialog, Bonjour allowed. Try USB. |
 | Clip waits on phone | Keep Playtest Demon running and the Mac awake. The phone retries automatically. |

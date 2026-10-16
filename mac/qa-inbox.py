@@ -314,6 +314,25 @@ def usb_loop(port):
         time.sleep(4)
 
 
+def watch_desk_owner(server, finished):
+    """A managed receiver must not outlive its desk, even after SIGKILL.
+
+    Standalone receiver launches have no desk owner and keep their normal lifecycle.
+    Check the actual parent relationship, so a reused PID cannot keep an orphan alive.
+    """
+    value = os.environ.get('PLAYTEST_DEMON_DESK_PID', '')
+    if not value.isdigit() or int(value) <= 1:
+        return
+    owner = int(value)
+
+    def watch():
+        while not finished.wait(1):
+            if os.getppid() != owner:
+                server.shutdown()
+                return
+    threading.Thread(target=watch, daemon=True).start()
+
+
 def main():
     ap = argparse.ArgumentParser(description="Receive Playtest Demon videos from Android phones.")
     ap.add_argument("--inbox", default="~/Desktop/QA-Inbox")
@@ -341,11 +360,14 @@ def main():
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGHUP, stop)
+    finished = threading.Event()
+    watch_desk_owner(srv, finished)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        finished.set()
         if dns:
             dns.terminate()
             try:
